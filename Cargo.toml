@@ -1,0 +1,28 @@
+[package]
+name = "worldbox"
+version = "0.0.1"
+edition = "2021"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[dependencies.bevy]
+version = "0.15.*"
+default-features = false
+features = [
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_window",
+    "bevy_scene",
+    "multi_threaded",
+    "file_watcher",
+    "embedded_watcher",
+    "x11",
+    "serialize",
+    "dynamic_linking"
+]
+
+[dependencies]
+serde = "1.0.*"
+ron = "0.8.*"
