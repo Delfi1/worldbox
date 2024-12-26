@@ -1,25 +1,29 @@
 use bevy::{
     prelude::*,
+    render::primitives::Aabb, 
+    tasks::*, 
     utils::*,
-    tasks::*
 };
 
 use super::{
     chunks::*,
     rendering::*,
-    utils::{self, CHUNK_TASKS, MESH_TASKS}
+    utils::{self, CHUNK_SIZE, CHUNK_TASKS, MESH_TASKS}
 };
 
+/// Main blocks textures map
+#[derive(Resource)]
+pub struct Texture(pub Handle<Image>);
 
 #[derive(Resource)]
 pub struct WorldController {
-    chunks: HashMap<IVec3, Chunk>,
-    load_chunks: Vec<IVec3>,
-    chunk_tasks: HashMap<IVec3, Task<RawChunk>>,
+    pub chunks: HashMap<IVec3, Chunk>,
+    pub load_chunks: Vec<IVec3>,
+    pub chunk_tasks: HashMap<IVec3, Task<RawChunk>>,
 
-    meshes: HashMap<IVec3, ChunkMesh>,
-    load_meshes: Vec<IVec3>,
-    mesh_tasks: HashMap<IVec3, Task<ChunkMesh>>
+    pub meshes: HashMap<IVec3, Entity>,
+    pub load_meshes: Vec<IVec3>,
+    pub mesh_tasks: HashMap<IVec3, Task<Option<ChunkMesh>>>
 }
 
 impl WorldController {
@@ -28,7 +32,7 @@ impl WorldController {
         for n in 0..7 {
             data.push(self.chunks.get(&(pos + utils::CHUNKS_OFFSETS[n])).cloned()?)
         }
-        ChunksRefs::new(data)
+        Some(ChunksRefs::new(utils::to_array(data)))
     }
 }
 
@@ -78,6 +82,7 @@ fn prepare(mut controller: ResMut<WorldController>) {
     controller.load_meshes.sort_by(|a, b| 
             a.distance_squared(IVec3::ZERO).cmp(&b.distance_squared(IVec3::ZERO)));
 
+    // Start chunks generate tasks
     let data = controller.load_chunks.drain(..).collect::<Vec<_>>();
     for pos in data {
         if controller.chunk_tasks.len() >= CHUNK_TASKS {
@@ -85,10 +90,11 @@ fn prepare(mut controller: ResMut<WorldController>) {
             continue;
         } 
         
-        let task = task_pool.spawn(RawChunk::generate());
+        let task = task_pool.spawn(RawChunk::generate(pos));
         controller.chunk_tasks.insert(pos, task);
     }
 
+    // Start meshes build tasks
     let data = controller.load_meshes.drain(..).collect::<Vec<_>>();
     for pos in data {
         if controller.mesh_tasks.len() >= MESH_TASKS {
@@ -97,7 +103,7 @@ fn prepare(mut controller: ResMut<WorldController>) {
         }
 
         if let Some(chunk) = controller.chunk_refs(pos) {
-            let task = task_pool.spawn(ChunkMesh::new(chunk));
+            let task = task_pool.spawn(ChunkMesh::build(chunk));
             controller.mesh_tasks.insert(pos, task);
         } else {
             controller.load_meshes.push(pos);
@@ -106,12 +112,19 @@ fn prepare(mut controller: ResMut<WorldController>) {
 }
 
 /// Join finished tasks;
-fn finish(mut controller: ResMut<WorldController>) {
-    if controller.load_chunks.len() != 0 {
+fn finish(
+    mut commands: Commands,
+    texture: Res<Texture>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut controller: ResMut<WorldController>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    // Debug (todo: change to bevy diag)
+    if controller.chunk_tasks.len() != 0 {
         println!("Load chunks: {}; Tasks: {};", controller.load_chunks.len(), controller.chunk_tasks.len());
     }
 
-    if controller.load_meshes.len() != 0 {
+    if controller.mesh_tasks.len() != 0 {
         println!("Load meshes: {}; Tasks: {};", controller.load_meshes.len(), controller.mesh_tasks.len());
     }
 
@@ -128,11 +141,25 @@ fn finish(mut controller: ResMut<WorldController>) {
     }
 
     // Join all mesh build tasks
-    let data: Vec<(IVec3, Task<ChunkMesh>)> = controller.mesh_tasks.drain().collect::<Vec<_>>();
+    let data = controller.mesh_tasks.drain().collect::<Vec<_>>();
     for (pos, task) in data {
         if task.is_finished() {
-            if let Some(mesh) = block_on(poll_once(task)) {
-                controller.meshes.insert(pos, mesh);
+            if let Some(Some(chunk_mesh)) = block_on(poll_once(task)) {
+                let mesh = chunk_mesh.spawn();
+                let handle = meshes.add(mesh);
+
+                let entity = commands.spawn((
+                    Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_SIZE as f32)),
+                    Mesh3d(handle),
+                    Transform::from_translation(pos.as_vec3() * Vec3::splat(CHUNK_SIZE as f32)),
+                    MeshMaterial3d(materials.add(StandardMaterial {
+                        base_color_texture: Some(texture.0.clone()),
+                        ..default()
+                    })),
+                )).id();
+                if let Some(old) = controller.meshes.insert(pos, entity) {
+                    commands.entity(old).despawn();
+                }
             }
         } else {
             controller.mesh_tasks.insert(pos, task);

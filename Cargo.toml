@@ -9,12 +9,13 @@ lto = "thin"
 
 [dependencies.bevy]
 version = "0.15.*"
-default-features = false
+#default-features = false
 features = [
     "bevy_pbr",
+    "bevy_asset",
+    "bevy_sprite",
     "bevy_render",
     "bevy_window",
-    "bevy_scene",
     "multi_threaded",
     "file_watcher",
     "embedded_watcher",
