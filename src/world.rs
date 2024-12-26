@@ -7,6 +7,7 @@ use bevy::{
 
 use super::{
     chunks::*,
+    camera::*,
     rendering::*,
     utils::{self, CHUNK_SIZE, CHUNK_TASKS, MESH_TASKS}
 };
@@ -19,10 +20,12 @@ pub struct Texture(pub Handle<Image>);
 pub struct WorldController {
     pub chunks: HashMap<IVec3, Chunk>,
     pub load_chunks: Vec<IVec3>,
+    pub unload_chunks: Vec<IVec3>,
     pub chunk_tasks: HashMap<IVec3, Task<RawChunk>>,
 
     pub meshes: HashMap<IVec3, Entity>,
     pub load_meshes: Vec<IVec3>,
+    pub unload_meshes: Vec<IVec3>,
     pub mesh_tasks: HashMap<IVec3, Task<Option<ChunkMesh>>>
 }
 
@@ -62,10 +65,12 @@ impl Default for WorldController {
             chunks: HashMap::with_capacity(1024),
             //load_chunks: Vec::with_capacity(512),
             load_chunks,
+            unload_chunks: Vec::new(),
             chunk_tasks: HashMap::with_capacity(32),
             meshes: HashMap::with_capacity(1024),
             //load_meshes: Vec::with_capacity(512),
             load_meshes,
+            unload_meshes: Vec::new(),
             mesh_tasks: HashMap::with_capacity(32)
         }
     }
@@ -167,10 +172,20 @@ fn finish(
     }
 }
 
+pub fn setup(mut commands: Commands) {
+    commands.spawn((
+        MainCamera::new(RenderDistance::new(8, 4)),
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 42.0, 0.0)
+    ));
+}
+
 pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WorldController>()
+            .add_plugins(CameraPlugin)
+            .add_systems(Startup, setup)
             .add_systems(Update, prepare)
             .add_systems(Last, finish);
     }

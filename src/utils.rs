@@ -50,10 +50,14 @@ pub fn vec3_to_index(pos: IVec3, bounds: i32) -> usize {
     (x_i + y_i + z_i) as usize
 }
 
-pub fn index_to_ivec3(i: usize) -> IVec3 {
-    let x = i % 32;
-    let y = (i / 32) % 32;
-    let z = i / (32 * 32);
+pub const fn index_to_ivec3(i: usize) -> IVec3 {
+    index_to_ivec3_bounds(i, CHUNK_SIZE)
+}
+
+pub const fn index_to_ivec3_bounds(i: usize, bounds: usize) -> IVec3 {
+    let x = i % bounds;
+    let y = (i / bounds) % bounds;
+    let z = i / (bounds * bounds);
     IVec3::new(x as i32, y as i32, z as i32)
 }
 
@@ -70,4 +74,8 @@ pub fn generate_indices(verts: usize) -> Vec<u32> {
         indices.push(vert_index + 3);
     });
     indices
+}
+
+pub fn get_chunk_pos(global: Vec3) -> IVec3 {
+    global.as_ivec3() / IVec3::splat(CHUNK_SIZE_I32)
 }

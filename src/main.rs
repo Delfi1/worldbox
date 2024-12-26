@@ -11,6 +11,7 @@ mod rendering;
 mod blocks;
 mod chunks;
 mod utils;
+mod camera;
 
 // WorldController plugin
 mod world;
@@ -20,11 +21,7 @@ fn setup(mut commands: Commands, mut assets: ResMut<AssetServer>, mut windows: Q
     if let Ok(mut window) = windows.get_single_mut() {
         window.title = String::from("WorldBox");
     }
-
-    commands.spawn((
-        Camera3d::default(),
-        Transform::from_translation(Vec3::new(16.0, 36.0, 16.0))
-    ));
+    
     commands.spawn((
         DirectionalLight {
             illuminance: 4000.0,
@@ -34,8 +31,8 @@ fn setup(mut commands: Commands, mut assets: ResMut<AssetServer>, mut windows: Q
         Transform::from_rotation(Quat::from_euler(
             EulerRot::ZYX,
             0.0,
-            f32::consts::PI / 3.,
-            -f32::consts::PI / 4.,
+            f32::consts::PI / 2.,
+            -f32::consts::PI / 5.,
         )),
     ));
     commands.insert_resource(world::Texture(assets.load("textures.png")));

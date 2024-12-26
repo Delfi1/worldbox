@@ -146,8 +146,6 @@ impl ChunkMesh {
             let local = pos.as_vec3();
 
             if current.meshable() {
-                println!("{:?}", current);
-
                 if !left.meshable() {
                     mesh.push_face(local, &current, Direction::Left);
                 }
@@ -170,8 +168,7 @@ impl ChunkMesh {
             }
         }
 
-        print!("Builing mesh...");
-        // Return Some if not empty
+        // Returns Some if not empty
         if mesh.vertices.len() != 0 {
             mesh.indices = utils::generate_indices(mesh.vertices.len());
             Some(mesh)
