@@ -24,15 +24,15 @@ fn setup(mut commands: Commands, mut assets: ResMut<AssetServer>, mut windows: Q
     
     commands.spawn((
         DirectionalLight {
-            illuminance: 4000.0,
-            shadows_enabled: false,
+            illuminance: 2000.0,
+            shadows_enabled: true,
             ..default()
         },
         Transform::from_rotation(Quat::from_euler(
             EulerRot::ZYX,
             0.0,
             f32::consts::PI / 2.,
-            -f32::consts::PI / 5.,
+            -f32::consts::PI / 2.,
         )),
     ));
     commands.insert_resource(world::Texture(assets.load("textures.png")));

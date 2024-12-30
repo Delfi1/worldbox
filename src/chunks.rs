@@ -23,8 +23,8 @@ impl RawChunk {
     pub async fn generate(pos: IVec3) -> Self {
         //todo: worldgen
         let mut chunk = Self::empty();
-        for i in 0..32 {
-            chunk.0[i] = Block::Grass;
+        if pos.y == 0 {
+            chunk = Self::filled(Block::Grass);
         }
 
         chunk

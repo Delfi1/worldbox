@@ -16,35 +16,11 @@ use super::{
 /// Render distance
 #[derive(Debug, Clone)]
 pub struct RenderDistance {
-    width: usize,
-    height: usize,
-    chunk_offsets: Vec<IVec3>,
-    mesh_offsets: Vec<IVec3>,
+    offsets: Vec<IVec3>,
 }
 
 impl RenderDistance {
-    fn make_chunk_offsets(half_width: usize) -> Vec<IVec3> {
-        let k_w = (half_width * 2) + 1;
-
-        let mut sampling_offsets = HashSet::with_capacity(k_w.pow(2));
-        for i in 0..k_w * k_w * k_w  {
-            let mut pos = index_to_ivec3_bounds(i, k_w);
-            let w = (k_w as f32 / 2.0) as i32;
-            pos -= IVec3::new(w, w, w);
-
-            sampling_offsets.insert(pos);
-        }
-        let mut offsets = Vec::from_iter(sampling_offsets);
-
-        offsets.sort_by(|a, b| {
-            a.distance_squared(IVec3::ZERO)
-                .cmp(&b.distance_squared(IVec3::ZERO))
-        });
-
-        offsets
-    }
-
-    fn make_mesh_offsets(half_width: usize, half_height: usize) -> Vec<IVec3> {
+    fn make_offsets(half_width: usize, half_height: usize) -> Vec<IVec3> {
         let k_w = (half_width * 2) + 1;
         let k_h = (half_height * 2) + 1;
         let mut sampling_offsets = Vec::with_capacity(k_w.pow(2) * k_h);
@@ -67,15 +43,13 @@ impl RenderDistance {
     }
 
     pub fn new(width: usize, height: usize) -> Self {
-        let chunk_offsets = Self::make_chunk_offsets(width + 1);
-        let mesh_offsets = Self::make_mesh_offsets(width, height);
+        let offsets = Self::make_offsets(width, height);
 
-        Self {width, height, chunk_offsets, mesh_offsets}
+        Self {offsets}
     }
 
     pub fn update(&mut self, width: usize, height: usize) {
-        self.chunk_offsets = Self::make_chunk_offsets(width + 1);
-        self.mesh_offsets = Self::make_mesh_offsets(width, height);
+        self.offsets = Self::make_offsets(width, height);
     }
 }
 
@@ -98,11 +72,8 @@ pub struct MainCamera {
     pub render_distance: RenderDistance,
     pub prev_chunk_pos: IVec3,
 
-    pub unresolved_chunk_load: Vec<IVec3>,
-    pub unresolved_mesh_load: Vec<IVec3>,
-
-    pub unresolved_chunk_unload: VecDeque<IVec3>,
-    pub unresolved_mesh_unload: VecDeque<IVec3>,
+    pub unresolved_load: Vec<IVec3>,
+    pub unresolved_unload: VecDeque<IVec3>,
 }
 
 impl MainCamera {
@@ -112,11 +83,8 @@ impl MainCamera {
             render_distance,
             prev_chunk_pos: ivec3(512, 512, 512),
 
-            unresolved_chunk_load: Vec::new(),
-            unresolved_chunk_unload: VecDeque::new(),
-
-            unresolved_mesh_load: Vec::new(),
-            unresolved_mesh_unload: VecDeque::new()
+            unresolved_load: Vec::new(),
+            unresolved_unload: VecDeque::new()
         }
     }
 }
@@ -127,7 +95,7 @@ impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            (detect_move, scan_chunk, scan_mesh, scan_chunk_unload, scan_mesh_unload)
+            (detect_move, scan_load, scan_unload)
                 .run_if(any_with_component::<MainCamera>)
         ).add_systems(
             Last, camera_control.run_if(any_with_component::<PrimaryWindow>)
@@ -159,7 +127,8 @@ fn camera_control(
 
     if let Ok((mut camera, mut transform)) = cameras.get_single_mut() {
         let forward = transform.forward().normalize();
-        let speed = camera.controller.speed;
+        let mut speed = camera.controller.speed;
+        if kbd.pressed(KeyCode::ControlLeft) { speed *= 2.0 }
         let scroll_speed = speed * scroll * 4.0;
 
         transform.translation += forward * scroll_speed * delta_time;
@@ -225,49 +194,31 @@ fn detect_move(
             return;
         }
 
-        let load_chunk_area = camera
-            .render_distance.chunk_offsets
+        let load_area = camera
+            .render_distance.offsets
             .iter()
             .map(|offset| chunk_pos + *offset)
             .collect::<HashSet<IVec3>>();
 
-        let unload_chunk_area = camera
-            .render_distance.chunk_offsets
+        let unload_area = camera
+            .render_distance.offsets
             .iter()
             .map(|offset| previous_chunk_pos + *offset)
             .collect::<HashSet<IVec3>>();
 
-        let load_mesh_area = camera
-            .render_distance.mesh_offsets
-            .iter()
-            .map(|offset| chunk_pos + *offset)
-            .collect::<HashSet<IVec3>>();
+        let load = load_area.difference(&unload_area);
+        let unload = unload_area.difference(&load_area);
 
-        let unload_mesh_area = camera
-            .render_distance.mesh_offsets
-            .iter()
-            .map(|offset| previous_chunk_pos + *offset)
-            .collect::<HashSet<IVec3>>();
-
-        let chunk_load = load_chunk_area.difference(&unload_chunk_area);
-        let chunk_unload = unload_chunk_area.difference(&load_chunk_area);
-        let mesh_load = load_mesh_area.difference(&unload_mesh_area);
-        let mesh_unload = unload_mesh_area.difference(&load_mesh_area);
-
-        camera.unresolved_chunk_load.extend(chunk_load);
-        camera.unresolved_chunk_unload.extend(chunk_unload);
-        camera.unresolved_mesh_unload.extend(mesh_unload);
-        camera.unresolved_mesh_load.extend(mesh_load);
+        camera.unresolved_load.extend(load);
+        camera.unresolved_unload.extend(unload);
 
         let MainCamera {
-            unresolved_chunk_load,
-            unresolved_mesh_load,
-            unresolved_chunk_unload,
-            unresolved_mesh_unload,
+            unresolved_load,
+            unresolved_unload,
             ..
         } = camera.as_mut();
 
-        for p in unresolved_mesh_unload.iter() {
+        for p in unresolved_unload.iter() {
             if let Some((i, _)) = world
                 .load_meshes
                 .iter()
@@ -277,39 +228,16 @@ fn detect_move(
                 world.load_meshes.remove(i);
             }
         }
-        for p in unresolved_chunk_unload.iter() {
-            if let Some((i, _)) = world
-                .load_chunks
-                .iter()
-                .enumerate()
-                .find(|(_i, k)| *k == p)
-            {
-                world.load_chunks.remove(i);
-            }
-        }
-
-        unresolved_mesh_load.retain(|p| {
-            let want_unload = unresolved_mesh_unload.contains(p);
-            !want_unload
-        });
-
-        unresolved_chunk_load.retain(|p| {
-            let want_unload = unresolved_chunk_unload.contains(p);
-            !want_unload
-        });
-
-        camera.unresolved_mesh_load.sort_by(|a, b| {
-            a.distance_squared(chunk_pos)
-                .cmp(&b.distance_squared(chunk_pos))
-        });
-        camera.unresolved_chunk_load.sort_by(|a, b| {
+        
+        unresolved_load.retain(|p| !unresolved_unload.contains(p));
+        unresolved_load.sort_by(|a, b| {
             a.distance_squared(chunk_pos)
                 .cmp(&b.distance_squared(chunk_pos))
         });
     }
 }
 
-fn scan_chunk(
+fn scan_load(
     mut cameras: Query<Mut<MainCamera>>,
     mut world: ResMut<WorldController>,
 ) {
@@ -318,74 +246,30 @@ fn scan_chunk(
             return;
         }
 
-        for chunk_pos in camera.unresolved_chunk_load.drain(..) {
-            let is_busy = world.chunks.contains_key(&chunk_pos)
-                || world.load_chunks.contains(&chunk_pos)
-                || world.chunk_tasks.contains_key(&chunk_pos);
+        for pos in camera.unresolved_load.drain(..) {
+            let busy = world.chunks.contains_key(&pos)
+                || world.load_chunks.contains(&pos)
+                || world.chunk_tasks.contains_key(&pos);
 
-            if !is_busy {
-                world.load_chunks.push(chunk_pos);
-
-                let index_of_unloading =
-                    world.unload_chunks.iter().enumerate().find_map(
-                        |(i, pos)| match pos == &chunk_pos {
-                            true => Some(i),
-                            false => None,
-                        },
-                    );
-
-                if let Some(i) = index_of_unloading {
-                    world.unload_chunks.remove(i);
-                }
+            if !busy {
+                world.load_chunks.push(pos);
+                world.load_meshes.push(pos);
             }
         }
     }
 }
 
-fn scan_chunk_unload(
+fn scan_unload(
     mut cameras: Query<Mut<MainCamera>>,
     mut world: ResMut<WorldController>,
 ) {
     for mut camera in cameras.iter_mut() {
-        for chunk_pos in camera.unresolved_chunk_unload.drain(..) {
-            let is_busy = !world.chunks.contains_key(&chunk_pos);
+        for pos in camera.unresolved_unload.drain(..) {
+            let is_busy = !world.chunks.contains_key(&pos)
+                || !world.meshes.contains_key(&pos);
+
             if !is_busy {
-                world.unload_chunks.push(chunk_pos);
-            }
-        }
-    }
-}
-
-fn scan_mesh_unload(mut cameras: Query<&mut MainCamera>, mut world: ResMut<WorldController>) {
-    for mut camera in cameras.iter_mut() {
-        for chunk_pos in camera.unresolved_mesh_unload.drain(..) {
-            world.unload_meshes.push(chunk_pos);
-        }
-    }
-}
-
-fn scan_mesh(mut cameras: Query<Mut<MainCamera>>, mut world: ResMut<WorldController>) {
-    for mut camera in cameras.iter_mut() {
-        if world.mesh_tasks.len() >= MESH_TASKS {
-            return;
-        }
-
-        for chunk_pos in camera.unresolved_mesh_load.drain(..) {
-            let busy = world.load_meshes.contains(&chunk_pos);
-
-            if !busy {
-                world.load_meshes.push(chunk_pos);
-
-                let index_of_unloading =
-                    world.unload_meshes.iter().enumerate().find_map(
-                        |(i, pos)| match pos == &chunk_pos {
-                            true => Some(i),
-                            false => None,
-                        },
-                    );
-                if let Some(i) = index_of_unloading {
-                    world.unload_meshes.remove(i);
-                }
+                world.unload.push(pos);
             }
         }
     }

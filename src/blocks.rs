@@ -7,11 +7,6 @@ pub enum Block {
 }
 
 impl Block {
-    pub const MESHABLES: &[Block] = &[
-        Self::Grass,
-        Self::Dirt
-    ];
-
     pub fn meshable(&self) -> bool {
         self.texture().is_some()
     }
@@ -25,25 +20,20 @@ impl Block {
         }
     }
 
-    fn size(offset: f32) -> f32 {
-        Self::MESHABLES.len() as f32 * offset
-    }
-
     pub fn face(&self, texture: usize, id: usize) -> [[f32; 2]; 4] {
         let texture = texture as f32;
         let id = id as f32;
         
         // textures coords
-        let (x0, y0) = (0.0, texture*32.0);
-        let (x1, y1) = (6.0*32.0, y0+32.0);
-        let offset = 32.0;
-        let size = Self::size(offset);
+        let offset = 0.03125;
+        let y0 = texture*offset;
+        let y1 = y0+offset;
 
         [
-         [(x0+offset*id)/x1, (y0)/size],
-         [(x0+offset*(id+1.))/x1, (y0)/size],
-         [(x0+offset*(id+1.))/x1, (y1)/size], 
-         [(x0+offset*id)/x1, (y1)/size],
+         [(offset*id), y0],
+         [(offset*(id+1.)), y0],
+         [(offset*(id+1.)), y1], 
+         [(offset*id), y1],
         ]
     }
 }

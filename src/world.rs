@@ -5,11 +5,13 @@ use bevy::{
     utils::*,
 };
 
+use crate::{blocks, utils::near_chunks};
+
 use super::{
     chunks::*,
     camera::*,
     rendering::*,
-    utils::{self, CHUNK_SIZE, CHUNK_TASKS, MESH_TASKS}
+    utils::{self, CHUNK_SIZE, CHUNK_SIZE_P3, CHUNK_TASKS, MESH_TASKS}
 };
 
 /// Main blocks textures map
@@ -19,13 +21,14 @@ pub struct Texture(pub Handle<Image>);
 #[derive(Resource)]
 pub struct WorldController {
     pub chunks: HashMap<IVec3, Chunk>,
-    pub load_chunks: Vec<IVec3>,
-    pub unload_chunks: Vec<IVec3>,
-    pub chunk_tasks: HashMap<IVec3, Task<RawChunk>>,
-
     pub meshes: HashMap<IVec3, Entity>,
+
+    // Load-unload queue
+    pub load_chunks: Vec<IVec3>,
     pub load_meshes: Vec<IVec3>,
-    pub unload_meshes: Vec<IVec3>,
+    pub unload: Vec<IVec3>,
+
+    pub chunk_tasks: HashMap<IVec3, Task<RawChunk>>,
     pub mesh_tasks: HashMap<IVec3, Task<Option<ChunkMesh>>>
 }
 
@@ -41,38 +44,35 @@ impl WorldController {
 
 impl Default for WorldController {
     fn default() -> Self {
-        let n: i32 = 4;
-        let mut load_chunks = Vec::with_capacity(((n as usize)*2).pow(3));
-        for x in -n..n {
-            for y in -n..n {
-                for z in -n..n {
-                    load_chunks.push(IVec3::new(x, y, z));
-                }
-            }
-        }
-
-        let k = n - 1;
-        let mut load_meshes = Vec::with_capacity(((k as usize)*2).pow(3));
-        for x in -k..k {
-            for y in -k..k {
-                for z in -k..k {
-                    load_meshes.push(IVec3::new(x, y, z));
-                }
-            }
-        }
-
         Self {
             chunks: HashMap::with_capacity(1024),
-            //load_chunks: Vec::with_capacity(512),
-            load_chunks,
-            unload_chunks: Vec::new(),
-            chunk_tasks: HashMap::with_capacity(32),
             meshes: HashMap::with_capacity(1024),
-            //load_meshes: Vec::with_capacity(512),
-            load_meshes,
-            unload_meshes: Vec::new(),
+            load_chunks: Vec::with_capacity(512),
+            load_meshes: Vec::with_capacity(512),
+            unload: Vec::new(),
+            chunk_tasks: HashMap::with_capacity(32),
             mesh_tasks: HashMap::with_capacity(32)
         }
+    }
+}
+
+fn keybind(
+    mut controller: ResMut<WorldController>,
+    cameras: Query<Ref<Transform>, With<MainCamera>>,
+    kbd: Res<ButtonInput<KeyCode>>,
+) {
+    let transform = cameras.get_single().unwrap();
+    // tesg fill chunk function
+    if kbd.just_pressed(KeyCode::KeyF) {
+        let pos = utils::get_chunk_pos(transform.translation);
+        if let Some(chunk) = controller.chunks.get(&pos) {
+            let mut guard = chunk.write();
+            let data = guard.get_mut();
+            for i in 0..CHUNK_SIZE_P3 {
+                data[i] = blocks::Block::Grass;
+            }
+        } else { return; }
+        controller.load_meshes.extend(near_chunks(pos));
     }
 }
 
@@ -116,6 +116,20 @@ fn prepare(mut controller: ResMut<WorldController>) {
     }
 }
 
+fn unload(
+    mut commands: Commands,
+    mut controller: ResMut<WorldController>
+) {
+    let data = controller.unload.drain(..).collect::<Vec<_>>();
+    for pos in data {
+        controller.chunks.remove(&pos);
+        controller.chunk_tasks.remove(&pos);
+        if let Some(mesh) = controller.meshes.remove(&pos) {
+            commands.entity(mesh).despawn();
+        }
+    }
+}
+
 /// Join finished tasks;
 fn finish(
     mut commands: Commands,
@@ -152,7 +166,8 @@ fn finish(
             if let Some(Some(chunk_mesh)) = block_on(poll_once(task)) {
                 let mesh = chunk_mesh.spawn();
                 let handle = meshes.add(mesh);
-
+                
+                //todo: custom shader
                 let entity = commands.spawn((
                     Aabb::from_min_max(Vec3::ZERO, Vec3::splat(CHUNK_SIZE as f32)),
                     Mesh3d(handle),
@@ -172,6 +187,16 @@ fn finish(
     }
 }
 
+pub fn handle_events (
+    mut controller: ResMut<WorldController>,
+    mut images: EventReader<AssetEvent<Image>>,
+) {
+    if !images.is_empty() {
+        let data = controller.meshes.keys().copied().collect::<Vec<_>>();
+        controller.load_meshes.extend(data);
+    }
+}
+
 pub fn setup(mut commands: Commands) {
     commands.spawn((
         MainCamera::new(RenderDistance::new(8, 4)),
@@ -186,7 +211,7 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldController>()
             .add_plugins(CameraPlugin)
             .add_systems(Startup, setup)
-            .add_systems(Update, prepare)
-            .add_systems(Last, finish);
+            .add_systems(Update, (prepare, keybind, handle_events))
+            .add_systems(Last, (unload, finish).chain());
     }
-}   
+}

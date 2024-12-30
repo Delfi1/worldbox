@@ -120,7 +120,7 @@ pub struct Vertex {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ChunkMesh { 
+pub struct ChunkMesh {
     vertices: Vec<Vertex>,
     indices: Vec<u32>
 }

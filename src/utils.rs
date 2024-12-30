@@ -4,7 +4,7 @@ use bevy::math::*;
 
 // Tasks consts
 pub const CHUNK_TASKS: usize = 16;
-pub const MESH_TASKS: usize = 4;
+pub const MESH_TASKS: usize = CHUNK_TASKS/2;
 
 // Chunks consts
 pub const CHUNK_SIZE: usize = 32;
@@ -20,6 +20,10 @@ pub const CHUNKS_OFFSETS: [IVec3; 7] = [
     IVec3::NEG_Z, // forward
     IVec3::Z,     // back
 ];
+
+pub fn near_chunks(pos: IVec3) -> Vec<IVec3> {
+    CHUNKS_OFFSETS.iter().map(|p| pos + p).collect::<Vec<_>>()
+}
 
 pub const NORMALS: [Vec3; 6] = [
     Vec3::NEG_X, // left
