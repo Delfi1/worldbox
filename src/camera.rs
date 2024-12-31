@@ -225,7 +225,7 @@ fn detect_move(
                 .enumerate()
                 .find(|(_i, k)| *k == p)
             {
-                world.load_meshes.remove(i);
+                world.load_meshes.remove(p);
             }
         }
         
@@ -252,8 +252,8 @@ fn scan_load(
                 || world.chunk_tasks.contains_key(&pos);
 
             if !busy {
-                world.load_chunks.push(pos);
-                world.load_meshes.push(pos);
+                world.load_chunks.insert(pos);
+                world.load_meshes.insert(pos);
             }
         }
     }

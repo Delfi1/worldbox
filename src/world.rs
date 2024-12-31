@@ -5,13 +5,13 @@ use bevy::{
     utils::*,
 };
 
-use crate::{blocks, utils::near_chunks};
-
+use std::f32::consts::PI;
 use super::{
+    blocks,
     chunks::*,
     camera::*,
     rendering::*,
-    utils::{self, CHUNK_SIZE, CHUNK_SIZE_P3, CHUNK_TASKS, MESH_TASKS}
+    utils::{self, near_chunks, get_chunk_pos, CHUNK_SIZE, CHUNK_SIZE_P3, CHUNK_TASKS, MESH_TASKS}
 };
 
 /// Main blocks textures map
@@ -24,8 +24,8 @@ pub struct WorldController {
     pub meshes: HashMap<IVec3, Entity>,
 
     // Load-unload queue
-    pub load_chunks: Vec<IVec3>,
-    pub load_meshes: Vec<IVec3>,
+    pub load_chunks: HashSet<IVec3>,
+    pub load_meshes: HashSet<IVec3>,
     pub unload: Vec<IVec3>,
 
     pub chunk_tasks: HashMap<IVec3, Task<RawChunk>>,
@@ -47,8 +47,8 @@ impl Default for WorldController {
         Self {
             chunks: HashMap::with_capacity(1024),
             meshes: HashMap::with_capacity(1024),
-            load_chunks: Vec::with_capacity(512),
-            load_meshes: Vec::with_capacity(512),
+            load_chunks: HashSet::with_capacity(512),
+            load_meshes: HashSet::with_capacity(512),
             unload: Vec::new(),
             chunk_tasks: HashMap::with_capacity(32),
             mesh_tasks: HashMap::with_capacity(32)
@@ -77,41 +77,47 @@ fn keybind(
 }
 
 /// Start generate chunks and meshes building;
-fn prepare(mut controller: ResMut<WorldController>) {
+fn prepare(
+    mut controller: ResMut<WorldController>,
+    cameras: Query<Ref<Transform>, With<MainCamera>>
+) {
     let task_pool = ComputeTaskPool::get();
 
-    // Sort chunks and meshes
-    // todo: change ZERO to "Camera Chunk"
-    controller.load_chunks.sort_by(|a, b| 
-        a.distance_squared(IVec3::ZERO).cmp(&b.distance_squared(IVec3::ZERO)));
-    controller.load_meshes.sort_by(|a, b| 
-            a.distance_squared(IVec3::ZERO).cmp(&b.distance_squared(IVec3::ZERO)));
-
+    // Sort chunks
+    let camera = cameras.get_single().unwrap();
+    let camera_chunk = get_chunk_pos(camera.translation);
+    
     // Start chunks generate tasks
-    let data = controller.load_chunks.drain(..).collect::<Vec<_>>();
+    let mut data = controller.load_chunks.iter().copied().collect::<Vec<_>>();
+    data.sort_by(|a, b| 
+        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
+
     for pos in data {
         if controller.chunk_tasks.len() >= CHUNK_TASKS {
-            controller.load_chunks.push(pos);
             continue;
-        } 
-        
+        }
+
+        controller.load_chunks.remove(&pos);
         let task = task_pool.spawn(RawChunk::generate(pos));
         controller.chunk_tasks.insert(pos, task);
     }
 
     // Start meshes build tasks
-    let data = controller.load_meshes.drain(..).collect::<Vec<_>>();
+    let mut data = controller.load_meshes.iter().copied().collect::<Vec<_>>();
+    data.sort_by(|a, b| 
+        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
+
     for pos in data {
         if controller.mesh_tasks.len() >= MESH_TASKS {
-            controller.load_meshes.push(pos);
             continue;
         }
 
+        controller.load_meshes.remove(&pos);
         if let Some(chunk) = controller.chunk_refs(pos) {
             let task = task_pool.spawn(ChunkMesh::build(chunk));
             controller.mesh_tasks.insert(pos, task);
         } else {
-            controller.load_meshes.push(pos);
+            controller.load_meshes.insert(pos);
         }
     }
 }
@@ -163,7 +169,7 @@ fn finish(
     let data = controller.mesh_tasks.drain().collect::<Vec<_>>();
     for (pos, task) in data {
         if task.is_finished() {
-            if let Some(Some(chunk_mesh)) = block_on(poll_once(task)) {
+            if let Some(chunk_mesh) = block_on(task) {
                 let mesh = chunk_mesh.spawn();
                 let handle = meshes.add(mesh);
                 
@@ -187,6 +193,7 @@ fn finish(
     }
 }
 
+// Simple hot-reloading
 pub fn handle_events (
     mut controller: ResMut<WorldController>,
     mut images: EventReader<AssetEvent<Image>>,
@@ -203,6 +210,21 @@ pub fn setup(mut commands: Commands) {
         Camera3d::default(),
         Transform::from_xyz(0.0, 42.0, 0.0)
     ));
+
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 2000.0,
+            shadows_enabled: true,
+            ..default()
+        },
+        Transform::from_rotation(Quat::from_euler(
+            EulerRot::ZYX,
+            0.0,
+            PI / 2.,
+            -PI / 3.,
+        )),
+    ));
+    
 }
 
 pub struct WorldPlugin;

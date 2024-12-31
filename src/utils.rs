@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use bevy::math::*;
 
 // Tasks consts
-pub const CHUNK_TASKS: usize = 16;
+pub const CHUNK_TASKS: usize = 8;
 pub const MESH_TASKS: usize = CHUNK_TASKS/2;
 
 // Chunks consts

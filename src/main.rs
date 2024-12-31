@@ -1,5 +1,3 @@
-use core::f32;
-
 use bevy::{
     prelude::*,
     tasks::*,
@@ -12,6 +10,7 @@ mod blocks;
 mod chunks;
 mod utils;
 mod camera;
+mod fps;
 
 // WorldController plugin
 mod world;
@@ -22,19 +21,6 @@ fn setup(mut commands: Commands, mut assets: ResMut<AssetServer>, mut windows: Q
         window.title = String::from("WorldBox");
     }
     
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 2000.0,
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(
-            EulerRot::ZYX,
-            0.0,
-            f32::consts::PI / 2.,
-            -f32::consts::PI / 2.,
-        )),
-    ));
     commands.insert_resource(world::Texture(assets.load("textures.png")));
 }
     
@@ -46,5 +32,6 @@ pub fn main() {
         }))
         .add_systems(Startup, setup)
         .add_plugins(WorldPlugin)
+        .add_plugins(fps::FpsPlugin)
         .run();
 }

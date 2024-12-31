@@ -12,28 +12,25 @@ impl Block {
     }
     
     /// Returns block texture id
-    pub fn texture(&self) -> Option<usize> {
+    pub fn texture(&self) -> Option<[usize; 6]> {
         match self {
-            Self::Grass => Some(0),
-            Self::Dirt => Some(1),
+            Self::Grass => Some([0, 1, 2, 3, 4, 5]),
+            Self::Dirt => Some([1024, 1025, 1026, 1027, 1028, 1029]),
             _ => None
         }
     }
 
-    pub fn face(&self, texture: usize, id: usize) -> [[f32; 2]; 4] {
-        let texture = texture as f32;
-        let id = id as f32;
-        
+    pub fn face(&self, texture: [usize; 6], id: usize) -> [[f32; 2]; 4] {
         // textures coords
         let offset = 0.03125;
-        let y0 = texture*offset;
-        let y1 = y0+offset;
+        let (x, y) = (texture[id]%1024, texture[id]/1024);
+        let (x0, y0) = ((x as f32)*offset, (y as f32)*offset);
 
         [
-         [(offset*id), y0],
-         [(offset*(id+1.)), y0],
-         [(offset*(id+1.)), y1], 
-         [(offset*id), y1],
+         [x0, y0],
+         [x0+offset, y0],
+         [x0+offset, y0+offset], 
+         [x0, y0+offset],
         ]
     }
 }
