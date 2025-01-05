@@ -3,6 +3,7 @@ mod mesher;
 mod rendering;
 mod systems;
 mod camera;
+mod fps;
 
 use bevy::{
     prelude::*,
@@ -14,18 +15,21 @@ use camera::*;
 use mesher::*;
 use chunk::*;
 use rendering::*;
+use fps::*;
 use hashbrown::HashSet;
+
+// todo: fix render textures outline bug;
 
 #[derive(Resource)]
 pub struct Controller {
-    chunks: HashMap<IVec3, chunk::Chunk>,
-    meshes: HashMap<IVec3, Entity>,
+    pub chunks: HashMap<IVec3, chunk::Chunk>,
+    pub meshes: HashMap<IVec3, Entity>,
     /// load chunks queue; build meshes queue
-    load: HashSet<IVec3>,
-    build: HashSet<IVec3>,
+    pub load: HashSet<IVec3>,
+    pub build: HashSet<IVec3>,
 
     /// unload queue
-    unload: HashSet<IVec3>,
+    pub unload: HashSet<IVec3>,
 
     /// Compute tasks
     load_tasks: HashMap<IVec3, Task<RawChunk>>,
@@ -91,9 +95,9 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Controller>()
-            .add_plugins((CameraPlugin, RenderingPlugin))
+            .add_plugins((FpsPlugin, CameraPlugin, RenderingPlugin))
             .add_systems(Startup, systems::setup)
-            .add_systems(PostUpdate, systems::begin)
+            .add_systems(PostUpdate, (systems::hot_reload, systems::begin).chain())
             .add_systems(Last, systems::join);
     }
 }

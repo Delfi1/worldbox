@@ -89,28 +89,24 @@ impl Quad {
                 let v1 = Vertex::new(
                     dir.world_sample(axis, x as i32, y as i32), 
                     dir,
-                    block,
                     Vec2::from(face[0])
                 );
         
                 let v2 = Vertex::new(
                     dir.world_sample(axis, (x + 1) as i32, y as i32), 
                     dir,
-                    block,
                     Vec2::from(face[1])
                 );
         
                 let v3 = Vertex::new(
                     dir.world_sample(axis, (x + 1) as i32, (y + 1) as i32), 
                     dir,
-                    block,
                     Vec2::from(face[2])
                 );
         
                 let v4 = Vertex::new(
                     dir.world_sample(axis, x as i32, (y + 1) as i32), 
                     dir,
-                    block,
                     Vec2::from(face[3])
                 );
                 
@@ -141,7 +137,7 @@ pub struct Vertex {
 }
 
 impl Vertex {
-    pub fn new(local: IVec3, dir: Direction, block: Block, uv: Vec2) -> Self {
+    pub fn new(local: IVec3, dir: Direction, uv: Vec2) -> Self {
         let data = local.x as u32
         | (local.y as u32) << 6u32
         | (local.z as u32) << 12u32

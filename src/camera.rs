@@ -6,14 +6,14 @@ use bevy::{
 use bevy::window::{CursorGrabMode, PrimaryWindow};
 use std::f32::consts::PI;
 
-pub struct Controller {
+pub struct CameraController {
     pub speed: f32,
     pub sensitivity: f32,
     pub yaw: f32,
     pub pitch: f32,
 }
 
-impl Controller {
+impl CameraController {
     fn new() -> Self {
         Self { speed: 12.0, sensitivity: 0.012, yaw: 0.0, pitch: 0.0 }
     }
@@ -21,12 +21,12 @@ impl Controller {
 
 #[derive(Component)]
 pub struct MainCamera {
-    pub controller: Controller,
+    pub controller: CameraController,
 }
 
 impl MainCamera {
     pub fn new() -> Self {
-        Self {controller: Controller::new()}
+        Self {controller: CameraController::new()}
     }
 }
 

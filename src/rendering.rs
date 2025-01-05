@@ -9,7 +9,7 @@ use bevy::{
 };
 
 #[derive(Resource, Clone)]
-pub struct GlobalTexture(Handle<Image>);
+pub struct GlobalTexture(pub Handle<Image>);
 
 impl GlobalTexture {
     pub fn inner(&self) -> Handle<Image> {
@@ -83,12 +83,10 @@ fn init(
         GlobalTexture(assets.load_with_settings("textures.png", |s: &mut _| {
             *s = ImageLoaderSettings {
                 sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    address_mode_u: ImageAddressMode::Repeat,
-                    address_mode_v: ImageAddressMode::Repeat,
                     mag_filter: ImageFilterMode::Nearest,
                     min_filter: ImageFilterMode::Nearest,
-                    mipmap_filter: ImageFilterMode::Linear,
-                    lod_min_clamp: 4.0,
+                    mipmap_filter: ImageFilterMode::Nearest,
+                    lod_max_clamp: 0.0,
                     ..default()
                 }),
                 ..default()

@@ -108,3 +108,13 @@ pub fn join(
         }
     }
 }
+
+pub fn hot_reload(
+    mut controller: ResMut<Controller>,
+    images: EventReader<AssetEvent<Image>>,
+) {
+    if !images.is_empty() {
+        let data = controller.meshes.keys().copied().collect::<Vec<_>>();
+        controller.build.extend(data);
+    }
+}

@@ -31,15 +31,15 @@ impl Block {
         let id = (self as u8) as f32;
         let dir = dir as f32;
         // "0-index" positions
-        let (x0, y0) = (id, dir);
+        let (x, y) = (id, dir);
         // Sizes
         let (sx, sy) = (256.0, 6.0);
-
+        
         [
-         [(x0+1.0)/sx, (y0+1.0)/sy],
-         [x0/sx, (y0+1.0)/sy],
-         [x0/sx, y0/sy],
-         [(x0+1.0)/sx, y0/sy],
+         [(x+1.0)/sx, (y+1.0)/sy],
+         [x/sx, (y+1.0)/sy],
+         [x/sx, y/sy],
+         [(x+1.0)/sx, y/sy],
         ]
     }
 }
@@ -64,7 +64,7 @@ impl RawChunk {
         (x + y + z) as usize
     }
 
-    pub async fn generate(pos: IVec3) -> Self {
+    pub async fn generate(_pos: IVec3) -> Self {
         let mut chunk = Self::empty();
         
         for x in 0..Self::SIZE_I32 {
