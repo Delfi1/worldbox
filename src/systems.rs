@@ -25,7 +25,7 @@ pub fn setup(
 }
 
 /// Max thread tasks;
-pub const MAX_TASKS: usize = 8;
+pub const MAX_TASKS: usize = 2;
 // Begin tasks
 pub fn begin(mut controller: ResMut<Controller>) {
     let task_pool = ComputeTaskPool::get();
@@ -67,6 +67,7 @@ pub fn join(
     mut controller: ResMut<Controller>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ChunkMaterial>>,
+    global_texture: ResMut<GlobalTexture>
 ) {
     // join chunks; run mesh builder
     let data: Vec<_> = controller.load_tasks.drain().collect();
@@ -89,13 +90,12 @@ pub fn join(
         }
         
         if let Some(mesh) = block_on(task) {
-            println!("Spawning mesh: {}", pos);
             let handler = meshes.add(mesh.spawn());
             let entity = commands.spawn((
                 Aabb::from_min_max(Vec3::ZERO, Vec3::splat(RawChunk::SIZE_F32)),
                 Mesh3d(handler),
-                MeshMaterial3d(materials.add(ChunkMaterial::default())),
-                Transform::from_translation(pos.as_vec3()*Vec3::splat(RawChunk::SIZE_F32))
+                MeshMaterial3d(materials.add(ChunkMaterial::new(global_texture.clone()))),
+                Transform::from_translation(pos.as_vec3() * Vec3::splat(RawChunk::SIZE_F32))
             )).id();
 
             if let Some(old) = controller.meshes.insert(pos, entity) {

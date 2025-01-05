@@ -5,7 +5,6 @@ use bevy::{
     prelude::*,
     utils::*
 };
-use hashbrown::HashSet;
 use strum::IntoEnumIterator;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -29,6 +28,22 @@ impl Block {
             Self::Air => false,
             _ => true
         }
+    }
+
+    pub fn uvs(self, dir: u32) -> [[f32; 2]; 4] {
+        let id = (self as u8) as f32;
+        let dir = dir as f32;
+        // "0-index" positions
+        let (x0, y0) = (id, dir);
+        // Sizes
+        let (sx, sy) = (256.0, 6.0);
+
+        [
+         [(x0+1.0)/sx, (y0+1.0)/sy],
+         [x0/sx, (y0+1.0)/sy],
+         [x0/sx, y0/sy],
+         [(x0+1.0)/sx, y0/sy],
+        ]
     }
 }
 

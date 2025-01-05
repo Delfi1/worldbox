@@ -30,38 +30,47 @@ struct ChunkMaterial {
 };
 
 @group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
-//@group(2) @binding(1) var my_array_texture: texture_2d_array<f32>;
-//@group(2) @binding(2) var my_array_texture_sampler: sampler;
+@group(2) @binding(1) var texture: texture_2d<f32>;
+@group(2) @binding(2) var texture_sampler: sampler;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
-    @location(0) position: vec3<f32>,
-    @location(1) normal_index: u32,
-    @location(2) color: vec3<f32>
+    @location(0) data: u32,
+    @location(1) uv: vec2<f32>
 };
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
-    @location(2) blend_color: vec3<f32>,
-    @location(3) instance_index: u32,
+    @location(2) uv: vec2<f32>,
+    @location(4) instance_index: u32,
 };
 
 var<private> normals: array<vec3<f32>, 6> = array<vec3<f32>,6> (
-	vec3<f32>(-1.0, 0.0, 0.0),  // Left
-	vec3<f32>(1.0, 0.0, 0.0),   // Right
-	vec3<f32>(0.0, -1.0, 0.0),  // Down
 	vec3<f32>(0.0, 1.0, 0.0),   // Up
+    vec3<f32>(-1.0, 0.0, 0.0),  // Left
+	vec3<f32>(1.0, 0.0, 0.0),   // Right
 	vec3<f32>(0.0, 0.0, -1.0),  // Forward
-	vec3<f32>(0.0, 0.0, 1.0)    // Back
+	vec3<f32>(0.0, 0.0, 1.0),    // Back
+    vec3<f32>(0.0, -1.0, 0.0),  // Down
 );
+
+fn x_bits(bits: u32) -> u32{
+    return (1u << bits) - 1u;
+}
 
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
 
-    let local_position = vec4<f32>(vertex.position, 1.0);
+    let x = f32(vertex.data & x_bits(6u));
+    let y = f32(vertex.data >> 6u & x_bits(6u));
+    let z = f32(vertex.data >> 12u & x_bits(6u));
+    let normal_index = vertex.data >> 18u & x_bits(3u);
+    let uvx = vertex.data >> 21u & x_bits(7u);
+
+    let local_position = vec4<f32>(x, y, z, 1.0);
     let world_position = get_world_from_local(vertex.instance_index) * local_position;
     out.clip_position = mesh_position_local_to_clip(
         get_world_from_local(vertex.instance_index),
@@ -70,9 +79,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     out.world_position = world_position;
 
-    let normal = normals[vertex.normal_index];
+    let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
-    out.blend_color = vertex.color;
+    out.uv = vertex.uv;
     out.instance_index = vertex.instance_index;
     return out;
 }
@@ -82,6 +91,7 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     var pbr_input = pbr_input_new();
 
     pbr_input.flags = mesh[input.instance_index].flags;
+    pbr_input.material.base_color = textureSample(texture, texture_sampler, input.uv);
 
     pbr_input.V = calculate_view(input.world_position, false);
     pbr_input.frag_coord = input.clip_position;
@@ -98,7 +108,6 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
 #else
     pbr_input.N = normalize(pbr_input.world_normal);
 #endif
-    pbr_input.material.base_color = vec4<f32>(input.blend_color, 1.0);
 
     pbr_input.material.reflectance = chunk_material.reflectance;
     pbr_input.material.perceptual_roughness = chunk_material.perceptual_roughness;

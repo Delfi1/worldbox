@@ -59,12 +59,12 @@ impl Direction {
     
     pub fn to_u32(&self) -> u32 {
         match self {
-            Self::Left => 0,
-            Self::Right => 1,
-            Self::Down => 2,
-            Self::Up => 3,
-            Self::Forward => 4,
-            Self::Back => 5,
+            Self::Up => 0,
+            Self::Left => 1,
+            Self::Right => 2,
+            Self::Forward => 3,
+            Self::Back => 4,
+            Self::Down => 5,
         }
     }
 }
@@ -77,29 +77,34 @@ impl Quad {
 
     pub fn vertices(self, dir: Direction, axis: i32, block: Block) -> Vec<Vertex> {
         let axis = axis + dir.negate_axis();
+        let face = block.uvs(dir.to_u32());
 
         let v1 = Vertex::new(
             dir.world_sample(axis, self.x as i32, self.y as i32), 
             dir,
-            block
+            block,
+            Vec2::from(face[0])
         );
 
         let v2 = Vertex::new(
             dir.world_sample(axis, (self.x + self.w) as i32, self.y as i32), 
             dir,
-            block
+            block,
+            Vec2::from(face[1])
         );
 
         let v3 = Vertex::new(
             dir.world_sample(axis, (self.x + self.w) as i32, (self.y + self.h) as i32), 
             dir,
-            block
+            block,
+            Vec2::from(face[2])
         );
 
         let v4 = Vertex::new(
             dir.world_sample(axis, self.x as i32, (self.y + self.h) as i32), 
             dir,
-            block
+            block,
+            Vec2::from(face[3])
         );
         
         let mut vertices = std::collections::VecDeque::from([v1, v2, v3, v4]);
@@ -118,18 +123,21 @@ impl Quad {
 /// [6]bits - Z
 /// [3]bits - Face && Uy
 /// [10]bits - UVx
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Vertex {
-    position: Vec3,
-    normal: u32,
-    color: Vec3
+    data: u32,
+    uv: Vec2
 }
 
 impl Vertex {
-    pub fn new(local: IVec3, dir: Direction, _block: Block) -> Self {
-        let position = local.as_vec3();
-        let color = Vec3::new(0.0, 0.8, 0.0);
-        Self { position, normal: dir.to_u32(), color }
+    pub fn new(local: IVec3, dir: Direction, block: Block, uv: Vec2) -> Self {
+        let data = local.x as u32
+        | (local.y as u32) << 6u32
+        | (local.z as u32) << 12u32
+        | (dir.to_u32()) << 18u32
+        | (block as u32) << 21u32;
+        
+        Self {data, uv}
     }
 }
 
@@ -233,16 +241,12 @@ impl ChunkMesh {
         indices
     }
 
-    fn positions(&self) -> Vec<Vec3> {
-        self.vertices.iter().map(|v| v.position).collect()
+    pub fn data(&self) -> Vec<u32> {
+        self.vertices.iter().map(|v| v.data).collect()
     }
 
-    fn normals(&self) -> Vec<u32> {
-        self.vertices.iter().map(|v| v.normal).collect()
-    }
-
-    fn colors(&self) -> Vec<Vec3> {
-        self.vertices.iter().map(|v| v.color).collect()
+    pub fn uvs(&self) -> Vec<Vec2> {
+        self.vertices.iter().map(|v| v.uv).collect()
     }
 
     pub fn spawn(self) -> Mesh {
@@ -251,10 +255,9 @@ impl ChunkMesh {
             RenderAssetUsages::RENDER_WORLD,
         );
 
-        mesh.insert_attribute(ATTRIBUTE_POSITION, self.positions());
-        mesh.insert_attribute(ATTRIBUTE_NORMAL, self.normals());
-        mesh.insert_attribute(ATTRIBUTE_COLOR, self.colors());
         let indices = self.generate_indices();
+        mesh.insert_attribute(ATTRIBUTE_DATA, self.data());
+        mesh.insert_attribute(ATTRIBUTE_UV, self.uvs());
         mesh.insert_indices(Indices::U32(indices));
 
         mesh
