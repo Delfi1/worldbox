@@ -27,5 +27,6 @@ version = "0.15.*"
 features = ["dynamic_linking", "wayland"]
 
 [dependencies]
+strum = {version="*", features=["derive"]}
 serde = "1.0.*"
 ron = "0.8.*"
