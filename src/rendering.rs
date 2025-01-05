@@ -83,12 +83,12 @@ fn init(
         GlobalTexture(assets.load_with_settings("textures.png", |s: &mut _| {
             *s = ImageLoaderSettings {
                 sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    // rewriting mode to repeat image,
                     address_mode_u: ImageAddressMode::Repeat,
                     address_mode_v: ImageAddressMode::Repeat,
                     mag_filter: ImageFilterMode::Nearest,
                     min_filter: ImageFilterMode::Nearest,
                     mipmap_filter: ImageFilterMode::Linear,
+                    lod_min_clamp: 4.0,
                     ..default()
                 }),
                 ..default()

@@ -78,42 +78,53 @@ impl Quad {
     pub fn vertices(self, dir: Direction, axis: i32, block: Block) -> Vec<Vertex> {
         let axis = axis + dir.negate_axis();
         let face = block.uvs(dir.to_u32());
+        let mut vertices = Vec::new();
 
-        let v1 = Vertex::new(
-            dir.world_sample(axis, self.x as i32, self.y as i32), 
-            dir,
-            block,
-            Vec2::from(face[0])
-        );
+        // Fixme: make normal culled mesher algoritm
+        for i in 0..self.w {
+            for j in 0..self.h {
+                let x = self.x + i;
+                let y = self.y + j;
 
-        let v2 = Vertex::new(
-            dir.world_sample(axis, (self.x + self.w) as i32, self.y as i32), 
-            dir,
-            block,
-            Vec2::from(face[1])
-        );
-
-        let v3 = Vertex::new(
-            dir.world_sample(axis, (self.x + self.w) as i32, (self.y + self.h) as i32), 
-            dir,
-            block,
-            Vec2::from(face[2])
-        );
-
-        let v4 = Vertex::new(
-            dir.world_sample(axis, self.x as i32, (self.y + self.h) as i32), 
-            dir,
-            block,
-            Vec2::from(face[3])
-        );
+                let v1 = Vertex::new(
+                    dir.world_sample(axis, x as i32, y as i32), 
+                    dir,
+                    block,
+                    Vec2::from(face[0])
+                );
         
-        let mut vertices = std::collections::VecDeque::from([v1, v2, v3, v4]);
-        if dir.reverse_order() {
-            let o = vertices.split_off(1);
-            o.into_iter().rev().for_each(|i| vertices.push_back(i));
+                let v2 = Vertex::new(
+                    dir.world_sample(axis, (x + 1) as i32, y as i32), 
+                    dir,
+                    block,
+                    Vec2::from(face[1])
+                );
+        
+                let v3 = Vertex::new(
+                    dir.world_sample(axis, (x + 1) as i32, (y + 1) as i32), 
+                    dir,
+                    block,
+                    Vec2::from(face[2])
+                );
+        
+                let v4 = Vertex::new(
+                    dir.world_sample(axis, x as i32, (y + 1) as i32), 
+                    dir,
+                    block,
+                    Vec2::from(face[3])
+                );
+                
+                let mut new = std::collections::VecDeque::from([v1, v2, v3, v4]);
+                if dir.reverse_order() {
+                    let o = new.split_off(1);
+                    o.into_iter().rev().for_each(|i| new.push_back(i));
+                }
+    
+                vertices.extend(new.into_iter());
+            }
         }
 
-        Vec::from(vertices)
+        vertices
     }
 }
 
@@ -134,12 +145,11 @@ impl Vertex {
         let data = local.x as u32
         | (local.y as u32) << 6u32
         | (local.z as u32) << 12u32
-        | (dir.to_u32()) << 18u32
-        | (block as u32) << 21u32;
+        | (dir.to_u32()) << 18u32;
         
         Self {data, uv}
     }
-}
+}   
 
 /// All mesh vertices
 #[derive(Debug, Default, Clone)]

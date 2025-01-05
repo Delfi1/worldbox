@@ -1,10 +1,7 @@
 //! Main chunks objects data;
 
 use std::sync::*;
-use bevy::{
-    prelude::*,
-    utils::*
-};
+use bevy::prelude::*;
 use strum::IntoEnumIterator;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
@@ -72,7 +69,7 @@ impl RawChunk {
         
         for x in 0..Self::SIZE_I32 {
             for z in 0..Self::SIZE_I32 {
-                if x % 2 == 0 && z % 2 == 0 {
+                if x % 2 == 0 {
                     let i = Self::block_index(IVec3::new(x, 16, z));
                     chunk.get_mut()[i] = Block::Grass;
                 }

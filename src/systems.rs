@@ -8,10 +8,14 @@ pub fn setup(
     mut commands: Commands,
 ) {
     commands.spawn((
-        DirectionalLight::default(),
+        DirectionalLight {
+            illuminance: 800.0,
+            ..default()
+        },
+        
         Transform::from_rotation(Quat::from_euler(
         EulerRot::XYZ,
-            -3.14/2.0,
+            -3.14/2.5,
             0.0,
             0.0
         ))
