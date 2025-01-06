@@ -55,7 +55,7 @@ impl RawChunk {
     pub const SIZE_F32: f32 = Self::SIZE as f32;
     pub const SIZE_P3: usize = Self::SIZE.pow(3);
 
-    /// YXZ coord system
+    /// XZY coord system
     fn block_index(pos: IVec3) -> usize {
         let x = pos.x % Self::SIZE_I32;
         let z = pos.z * Self::SIZE_I32;
@@ -69,7 +69,7 @@ impl RawChunk {
         
         for x in 0..Self::SIZE_I32 {
             for z in 0..Self::SIZE_I32 {
-                if x % 2 == 0 {
+                if x % 2 == 0 && z % 2 == 0 {
                     let i = Self::block_index(IVec3::new(x, 16, z));
                     chunk.get_mut()[i] = Block::Grass;
                 }
@@ -79,7 +79,7 @@ impl RawChunk {
         return chunk
     }   
 
-    /// Create a chunk full filled with block
+    /// Create a chunk filled with block
     pub fn filled(block: Block) -> Self {
         Self(std::iter::repeat_n(block, Self::SIZE_P3).collect())
     }

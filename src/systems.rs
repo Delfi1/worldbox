@@ -4,9 +4,7 @@ use bevy::{
 
 use super::*;
 
-pub fn setup(
-    mut commands: Commands,
-) {
+pub fn setup(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
             illuminance: 800.0,
@@ -29,7 +27,7 @@ pub fn setup(
 }
 
 /// Max thread tasks;
-pub const MAX_TASKS: usize = 2;
+pub const MAX_TASKS: usize = 1;
 // Begin tasks
 pub fn begin(mut controller: ResMut<Controller>) {
     let task_pool = ComputeTaskPool::get();
@@ -111,10 +109,14 @@ pub fn join(
 
 pub fn hot_reload(
     mut controller: ResMut<Controller>,
+    mut commands: Commands,
     images: EventReader<AssetEvent<Image>>,
 ) {
     if !images.is_empty() {
-        let data = controller.meshes.keys().copied().collect::<Vec<_>>();
-        controller.build.extend(data);
+        // clear meshes
+        for (pos, entity) in controller.meshes.drain().collect::<Vec<_>>() {
+            commands.entity(entity).despawn();
+            controller.build.insert(pos);
+        }
     }
 }
