@@ -97,6 +97,7 @@ impl Plugin for WorldPlugin {
         app.init_resource::<Controller>()
             .add_plugins((FpsPlugin, CameraPlugin, RenderingPlugin))
             .add_systems(Startup, systems::setup)
+            .add_systems(Update, systems::skybox)
             .add_systems(PostUpdate, (systems::hot_reload, systems::begin).chain())
             .add_systems(Last, systems::join);
     }
