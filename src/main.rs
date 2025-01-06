@@ -38,9 +38,10 @@ pub struct Controller {
 
 impl Default for Controller {
     fn default() -> Self {
-        let n = 4;
+        let n = 16;
         let k = n-1;
 
+        // Test generate chunks area
         let mut load = HashSet::new();
         for x in -n..n {
             for y in -n..n {

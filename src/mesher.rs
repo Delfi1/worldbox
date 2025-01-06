@@ -69,58 +69,47 @@ impl Direction {
     }
 }
 
-pub struct Quad {x: usize, y: usize, w: usize, h: usize}
-impl Quad {
-    pub fn new(x: usize, y: usize, w: usize, h: usize) -> Self {
-        Self { x, y, w, h }
+pub struct Face {x: i32, y: i32}
+impl Face {
+    pub fn new(x: i32, y: i32) -> Self {
+        Self { x, y }
     }
 
     pub fn vertices(self, dir: Direction, axis: i32, block: Block) -> Vec<Vertex> {
         let axis = axis + dir.negate_axis();
         let face = block.uvs(dir.to_u32());
-        let mut vertices = Vec::new();
 
-        // Fixme: make normal culled mesher algoritm
-        for i in 0..self.w {
-            for j in 0..self.h {
-                let x = self.x + i;
-                let y = self.y + j;
+        let v1 = Vertex::new(
+            dir.world_sample(axis, self.x, self.y), 
+            dir,
+            Vec2::from(face[0])
+        );
 
-                let v1 = Vertex::new(
-                    dir.world_sample(axis, x as i32, y as i32), 
-                    dir,
-                    Vec2::from(face[0])
-                );
+        let v2 = Vertex::new(
+            dir.world_sample(axis, self.x + 1, self.y), 
+            dir,
+            Vec2::from(face[1])
+        );
+
+        let v3 = Vertex::new(
+            dir.world_sample(axis, self.x + 1, self.y + 1), 
+            dir,
+            Vec2::from(face[2])
+        );
+
+        let v4 = Vertex::new(
+            dir.world_sample(axis, self.x, self.y + 1), 
+            dir,
+            Vec2::from(face[3])
+        );
         
-                let v2 = Vertex::new(
-                    dir.world_sample(axis, (x + 1) as i32, y as i32), 
-                    dir,
-                    Vec2::from(face[1])
-                );
-        
-                let v3 = Vertex::new(
-                    dir.world_sample(axis, (x + 1) as i32, (y + 1) as i32), 
-                    dir,
-                    Vec2::from(face[2])
-                );
-        
-                let v4 = Vertex::new(
-                    dir.world_sample(axis, x as i32, (y + 1) as i32), 
-                    dir,
-                    Vec2::from(face[3])
-                );
-                
-                let mut new = std::collections::VecDeque::from([v1, v2, v3, v4]);
-                if dir.reverse_order() {
-                    let o = new.split_off(1);
-                    o.into_iter().rev().for_each(|i| new.push_back(i));
-                }
-    
-                vertices.extend(new.into_iter());
-            }
+        let mut new = std::collections::VecDeque::from([v1, v2, v3, v4]);
+        if dir.reverse_order() {
+            let o = new.split_off(1);
+            o.into_iter().rev().for_each(|i| new.push_back(i));
         }
 
-        vertices
+        Vec::from(new)
     }
 }
 
@@ -155,48 +144,13 @@ pub struct ChunkMesh {
 }
 
 impl ChunkMesh {
-    fn generate_quads(mut data: [u32; RawChunk::SIZE]) -> Vec<Quad> {
-        let mut quads = Vec::new();
-        let size = RawChunk::SIZE as u32;
-
-        for row in 0..data.len() {
-            let mut y = 0u32;
-            while y < size {
-                y += (data[row] >> y).trailing_zeros();
-                if y >= size { continue; }
-
-                let h = (data[row] >> y).trailing_ones();
-                let h_mask = u32::checked_shl(1, h)
-                    .map_or(!0, |v| v - 1);
-                let mask = h_mask << y;
-                
-                let mut w = 1;
-                while row + w < RawChunk::SIZE {
-                    let next_row = (data[row+w] >> y) & h_mask;
-                    if next_row != h_mask {
-                        break;
-                    }
-
-                    data[row + w] = data[row + w] & !mask;
-                    w += 1;
-                }
-                
-                // x, y, w, h
-                quads.push(Quad::new(row, y as usize, w, h as usize));
-                y += h;
-            }
-        }
-
-        quads
-    }
-
     fn make_vertices(dir: Direction, refs: &ChunksRefs) -> Vec<Vertex> {
         let mut vertices = Vec::with_capacity(512);
         let size = RawChunk::SIZE_I32;
 
+        // Culled meshser
         for axis in 0..size {
             for block in Block::meshables() {
-                let mut data = [0u32; 32];
                 for i in 0..size.pow(2) {
                     let row = i % size;
                     let column = i / size;
@@ -205,12 +159,12 @@ impl ChunkMesh {
                         (refs.get_block(pos), refs.get_block(pos + dir.air_sample()));
 
                     if current != block { continue; }
-                    let is_meshable = current.is_meshable() && !neg_z.is_meshable();
-                    data[row as usize] = ((1 << column) * is_meshable as u32) | data[row as usize];
+                    // if meshable
+                    if current.is_meshable() && !neg_z.is_meshable() {
+                        let face = Face::new(row, column);
+                        vertices.extend(face.vertices(dir, axis, block));
+                    }
                 }
-
-                let quads = Self::generate_quads(data);
-                quads.into_iter().for_each(|q| vertices.extend(q.vertices(dir, axis, block)));
             }
         }
 

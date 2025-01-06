@@ -27,10 +27,14 @@ pub fn setup(mut commands: Commands) {
 }
 
 /// Max thread tasks;
-pub const MAX_TASKS: usize = 1;
+pub const MAX_TASKS: usize = 4;
 // Begin tasks
-pub fn begin(mut controller: ResMut<Controller>) {
+pub fn begin(
+    mut controller: ResMut<Controller>,
+    camera_query: Query<Ref<Transform>, With<Camera3d>>
+) {
     let task_pool = ComputeTaskPool::get();
+    let camera_chunk = RawChunk::global(camera_query.single().translation);
 
     if controller.load.len() != 0 {
         println!("Load: {}", controller.load.len())
@@ -40,26 +44,29 @@ pub fn begin(mut controller: ResMut<Controller>) {
     }
 
     // chunks queue
-    let mut data = controller.load.iter().copied().collect::<Vec<_>>();
+    let l = (MAX_TASKS - controller.load_tasks.len()).min(controller.load.len());
+
+    let mut data = controller.load.iter().collect::<Vec<_>>();
     data.sort_by(|a, b| 
-        a.distance_squared(IVec3::ZERO).cmp(&b.distance_squared(IVec3::ZERO)));
+        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
+    
+    let data: Vec<_> = data.drain(0..l).copied().collect();
     for pos in data {
-        if controller.load_tasks.len() < MAX_TASKS {
-            controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(pos)));
-            controller.load.remove(&pos);
-        }
+        controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(pos)));
+        controller.load.remove(&pos);
     }
 
     // meshes queue
-    let mut data: Vec<_> = controller.build.iter().copied().collect();
-    data.sort_by(|a, b| 
-        a.distance_squared(IVec3::ZERO).cmp(&b.distance_squared(IVec3::ZERO)));
+    let b = (MAX_TASKS - controller.build_tasks.len()).min(controller.build.len());
+    let mut data = controller.build.iter().collect::<Vec<_>>();
+    data.sort_by(|m, n| 
+        m.distance_squared(camera_chunk).cmp(&n.distance_squared(camera_chunk)));
+    
+    let data: Vec<_> = data.drain(0..b).copied().collect();
     for pos in data {
-        if controller.build_tasks.len() < MAX_TASKS {
-            if let Some(refs) = controller.refs(pos) {
-                controller.build_tasks.insert(pos, task_pool.spawn(ChunkMesh::build(refs)));
-                controller.build.remove(&pos);
-            }
+        if let Some(refs) = controller.refs(pos) {
+            controller.build_tasks.insert(pos, task_pool.spawn(ChunkMesh::build(refs)));
+            controller.build.remove(&pos);
         }
     }
 }

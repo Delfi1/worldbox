@@ -30,3 +30,4 @@ features = ["dynamic_linking", "wayland"]
 strum = {version="*", features=["derive"]}
 serde = "1.0.*"
 ron = "0.8.*"
+rand = "0.8.*"
