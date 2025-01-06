@@ -3,11 +3,10 @@ use bevy::{
 };
 
 use super::*;
-
 pub fn setup(mut commands: Commands) {
     commands.spawn((
         DirectionalLight {
-            illuminance: 800.0,
+            illuminance: 1800.0,
             ..default()
         },
         
@@ -43,30 +42,27 @@ pub fn begin(
         println!("Build: {};", controller.build.len())
     }
 
+    // Sort chunks & meshes
+    controller.load.sort_by(|a, b| 
+        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
+    controller.build.sort_by(|a, b| 
+        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
+
     // chunks queue
     let l = (MAX_TASKS - controller.load_tasks.len()).min(controller.load.len());
-
-    let mut data = controller.load.iter().collect::<Vec<_>>();
-    data.sort_by(|a, b| 
-        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
-    
-    let data: Vec<_> = data.drain(0..l).copied().collect();
+    let data: Vec<_> = controller.load.drain(0..l).collect();
     for pos in data {
         controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(pos)));
-        controller.load.remove(&pos);
     }
 
     // meshes queue
     let b = (MAX_TASKS - controller.build_tasks.len()).min(controller.build.len());
-    let mut data = controller.build.iter().collect::<Vec<_>>();
-    data.sort_by(|m, n| 
-        m.distance_squared(camera_chunk).cmp(&n.distance_squared(camera_chunk)));
-    
-    let data: Vec<_> = data.drain(0..b).copied().collect();
+    let data: Vec<_> = controller.build.drain(0..b).collect();
     for pos in data {
         if let Some(refs) = controller.refs(pos) {
             controller.build_tasks.insert(pos, task_pool.spawn(ChunkMesh::build(refs)));
-            controller.build.remove(&pos);
+        } else {
+            controller.build.push(pos);
         }
     }
 }
@@ -99,7 +95,7 @@ pub fn join(
         }
         
         if let Some(mesh) = block_on(task) {
-            let handler = meshes.add(mesh.spawn());
+            let handler = meshes.add(mesh);
             let entity = commands.spawn((
                 Aabb::from_min_max(Vec3::ZERO, Vec3::splat(RawChunk::SIZE_F32)),
                 Mesh3d(handler),
@@ -123,7 +119,7 @@ pub fn hot_reload(
         // clear meshes
         for (pos, entity) in controller.meshes.drain().collect::<Vec<_>>() {
             commands.entity(entity).despawn();
-            controller.build.insert(pos);
+            controller.build.push(pos);
         }
     }
 }

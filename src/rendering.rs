@@ -20,18 +20,10 @@ impl GlobalTexture {
 pub const ATTRIBUTE_DATA: MeshVertexAttribute =
     MeshVertexAttribute::new("data", 536618, VertexFormat::Uint32);
 
-pub const ATTRIBUTE_UV: MeshVertexAttribute =
-    MeshVertexAttribute::new("uv", 586618, VertexFormat::Float32x2);
-
-
 #[derive(Clone, Asset, Reflect, AsBindGroup, Debug)]
 pub struct ChunkMaterial {
     #[uniform(0)]
-    pub reflectance: f32,
-    #[uniform(0)]
-    pub perceptual_roughness: f32,
-    #[uniform(0)]
-    pub metallic: f32,
+    pub roughness: f32,
     #[texture(1)]
     #[sampler(2)]
     texture: Handle<Image>,
@@ -40,9 +32,7 @@ pub struct ChunkMaterial {
 impl ChunkMaterial {
     pub fn new(texture: GlobalTexture) -> Self {
         Self {
-            reflectance: 0.5,
-            perceptual_roughness: 1.0,
-            metallic: 0.01,
+            roughness: 0.3,
             texture: texture.inner()
         }
     }
@@ -68,7 +58,6 @@ impl Material for ChunkMaterial {
     ) -> Result<(), SpecializedMeshPipelineError> {
         let vertex_layout = layout.0.get_layout(&[
             ATTRIBUTE_DATA.at_shader_location(0),
-            ATTRIBUTE_UV.at_shader_location(1),
         ])?;
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())

@@ -4,6 +4,9 @@ use std::sync::*;
 use bevy::prelude::*;
 use strum::IntoEnumIterator;
 use rand::seq::SliceRandom;
+fn random<T>(vec: &Vec<T>) -> &T {
+    vec.choose(&mut rand::thread_rng()).unwrap()
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[derive(strum::EnumIter)]
@@ -34,19 +37,17 @@ impl Block {
         Block::iter().collect()
     }
 
-    pub fn uvs(self, dir: u32) -> [[f32; 2]; 4] {
-        let id = (self as u8) as f32;
-        let dir = dir as f32;
+    pub const fn uvs(self, dir: u32) -> [UVec2; 4] {
+        let id = (self as u8) as u32;
+        let dir = dir as u32;
         // "0-index" positions
         let (x, y) = (id, dir);
-        // Sizes
-        let (sx, sy) = (256.0, 6.0);
         
         [
-         [(x+1.0)/sx, (y+1.0)/sy],
-         [x/sx, (y+1.0)/sy],
-         [x/sx, y/sy],
-         [(x+1.0)/sx, y/sy],
+         UVec2::new(x+1, y+1),
+         UVec2::new(x, y+1),
+         UVec2::new(x, y),
+         UVec2::new(x+1, y),
         ]
     }
 }
@@ -75,7 +76,7 @@ impl RawChunk {
         (x + y + z) as usize
     }
 
-    pub async fn generate(_pos: IVec3) -> Self {
+    pub async fn generate(pos: IVec3) -> Self {
         let mut chunk = Self::empty();
         let blocks = Block::all();
 
@@ -86,13 +87,12 @@ impl RawChunk {
                         let i = Self::block_index(IVec3::new(x, y, z));
                         
                         // get random block
-                        chunk.get_mut()[i] = blocks 
-                            .choose(&mut rand::thread_rng()).cloned().unwrap();
+                        chunk.get_mut()[i] = random(&blocks).clone();
                     }
                 }
             }
         }
-
+        
         return chunk
     }   
 

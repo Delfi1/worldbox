@@ -82,25 +82,25 @@ impl Face {
         let v1 = Vertex::new(
             dir.world_sample(axis, self.x, self.y), 
             dir,
-            Vec2::from(face[0])
+            face[0]
         );
 
         let v2 = Vertex::new(
             dir.world_sample(axis, self.x + 1, self.y), 
             dir,
-            Vec2::from(face[1])
+            face[1]
         );
 
         let v3 = Vertex::new(
             dir.world_sample(axis, self.x + 1, self.y + 1), 
             dir,
-            Vec2::from(face[2])
+            face[2]
         );
 
         let v4 = Vertex::new(
             dir.world_sample(axis, self.x, self.y + 1), 
             dir,
-            Vec2::from(face[3])
+            face[3]
         );
         
         let mut new = std::collections::VecDeque::from([v1, v2, v3, v4]);
@@ -120,19 +120,18 @@ impl Face {
 /// [3]bits - Face && Uy
 /// [10]bits - UVx
 #[derive(Debug, Clone, Copy)]
-pub struct Vertex {
-    data: u32,
-    uv: Vec2
-}
+pub struct Vertex(u32);
 
 impl Vertex {
-    pub fn new(local: IVec3, dir: Direction, uv: Vec2) -> Self {
+    pub fn new(local: IVec3, dir: Direction, uv: UVec2) -> Self {
         let data = local.x as u32
         | (local.y as u32) << 6u32
         | (local.z as u32) << 12u32
-        | (dir.to_u32()) << 18u32;
+        | (dir.to_u32()) << 18u32
+        | (uv.x) << 21u32
+        | (uv.y) << 28u32;
         
-        Self {data, uv}
+        Self(data)
     }
 }   
 
@@ -171,7 +170,7 @@ impl ChunkMesh {
         vertices
     }
 
-    pub async fn build(refs: ChunksRefs) -> Option<Self> {
+    pub async fn build(refs: ChunksRefs) -> Option<Mesh> {
         let mut mesh = Self::default();
 
         // Apply all directions
@@ -180,7 +179,7 @@ impl ChunkMesh {
         }
         
         if !mesh.vertices.is_empty() {
-            Some(mesh)
+            Some(mesh.spawn())
         } else {
             None
         }
@@ -201,14 +200,6 @@ impl ChunkMesh {
         indices
     }
 
-    pub fn data(&self) -> Vec<u32> {
-        self.vertices.iter().map(|v| v.data).collect()
-    }
-
-    pub fn uvs(&self) -> Vec<Vec2> {
-        self.vertices.iter().map(|v| v.uv).collect()
-    }
-
     pub fn spawn(self) -> Mesh {
         let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
@@ -216,8 +207,8 @@ impl ChunkMesh {
         );
 
         let indices = self.generate_indices();
-        mesh.insert_attribute(ATTRIBUTE_DATA, self.data());
-        mesh.insert_attribute(ATTRIBUTE_UV, self.uvs());
+        let data: Vec<_> = self.vertices.into_iter().map(|v| v.0).collect();
+        mesh.insert_attribute(ATTRIBUTE_DATA, data);
         mesh.insert_indices(Indices::U32(indices));
 
         mesh

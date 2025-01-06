@@ -24,9 +24,7 @@
 #import bevy_pbr::prepass_utils
 
 struct ChunkMaterial {
-    reflectance: f32,
-    perceptual_roughness: f32,
-    metallic: f32,
+    roughness: f32
 };
 
 @group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
@@ -35,8 +33,7 @@ struct ChunkMaterial {
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
-    @location(0) data: u32,
-    @location(1) uv: vec2<f32>
+    @location(0) data: u32
 };
 
 struct VertexOutput {
@@ -68,6 +65,8 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let y = f32(vertex.data >> 6u & x_bits(6u));
     let z = f32(vertex.data >> 12u & x_bits(6u));
     let normal_index = vertex.data >> 18u & x_bits(3u);
+    let uvx = vertex.data >> 21u & x_bits(7u);
+    let uvy = vertex.data >> 28u & x_bits(3u);
 
     let local_position = vec4<f32>(x, y, z, 1.0);
     let world_position = get_world_from_local(vertex.instance_index) * local_position;
@@ -80,7 +79,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
-    out.uv = vertex.uv;
+    out.uv = vec2(f32(uvx)/256.0, f32(uvy)/6.0);
     out.instance_index = vertex.instance_index;
     return out;
 }
@@ -108,9 +107,9 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     pbr_input.N = normalize(pbr_input.world_normal);
 #endif
 
-    pbr_input.material.reflectance = chunk_material.reflectance;
-    pbr_input.material.perceptual_roughness = chunk_material.perceptual_roughness;
-    pbr_input.material.metallic = chunk_material.metallic;
+    pbr_input.material.reflectance = 0.0;
+    pbr_input.material.perceptual_roughness = chunk_material.roughness;
+    pbr_input.material.metallic = 0.0;
 
 #ifdef PREPASS_PIPELINE
     let out = deferred_output(in, pbr_input);

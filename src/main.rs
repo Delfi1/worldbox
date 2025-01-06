@@ -16,7 +16,6 @@ use mesher::*;
 use chunk::*;
 use rendering::*;
 use fps::*;
-use hashbrown::HashSet;
 
 // todo: fix render textures outline bug;
 
@@ -25,37 +24,37 @@ pub struct Controller {
     pub chunks: HashMap<IVec3, chunk::Chunk>,
     pub meshes: HashMap<IVec3, Entity>,
     /// load chunks queue; build meshes queue
-    pub load: HashSet<IVec3>,
-    pub build: HashSet<IVec3>,
+    pub load: Vec<IVec3>,
+    pub build: Vec<IVec3>,
 
     /// unload queue
-    pub unload: HashSet<IVec3>,
+    pub unload: Vec<IVec3>,
 
     /// Compute tasks
     load_tasks: HashMap<IVec3, Task<RawChunk>>,
-    build_tasks: HashMap<IVec3, Task<Option<ChunkMesh>>>,
+    build_tasks: HashMap<IVec3, Task<Option<Mesh>>>,
 }
 
 impl Default for Controller {
     fn default() -> Self {
-        let n = 16;
+        let n = 4;
         let k = n-1;
 
         // Test generate chunks area
-        let mut load = HashSet::new();
+        let mut load = Vec::new();
         for x in -n..n {
             for y in -n..n {
                 for z in -n..n {
-                    load.insert(IVec3::new(x, y, z));
+                    load.push(IVec3::new(x, y, z));
                 }
             }
         }
 
-        let mut build = HashSet::new();
+        let mut build = Vec::new();
         for x in -k..k {
             for y in -k..k {
                 for z in -k..k {
-                    build.insert(IVec3::new(x, y, z));
+                    build.push(IVec3::new(x, y, z));
                 }
             }
         }
@@ -68,7 +67,7 @@ impl Default for Controller {
             //build: HashSet::with_capacity(1024),
             load, build,
             
-            unload: HashSet::with_capacity(512),
+            unload: Vec::with_capacity(512),
 
             load_tasks: HashMap::new(),
             build_tasks: HashMap::new(),
