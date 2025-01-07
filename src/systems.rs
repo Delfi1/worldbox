@@ -1,11 +1,14 @@
+use std::thread::current;
+
 use bevy::{
+    core_pipeline::Skybox, 
     prelude::*,
-    core_pipeline::Skybox,
     render::{
         primitives::*,
         render_resource::*
     },
-    tasks::*
+    tasks::*, 
+    window::*
 };
 
 #[derive(Resource)]
@@ -14,25 +17,34 @@ pub struct SkyBoxHandler(pub Handle<Image>);
 use super::*;
 pub fn setup(
     assets: Res<AssetServer>,
+    mut windows: Query<Mut<Window>, With<PrimaryWindow>>,
+    config: Res<MainConfig>,
     mut commands: Commands
 ) {
     commands.spawn((
         DirectionalLight {
-            illuminance: 4000.0,
+            illuminance: config.illuminance,
+            //shadows_enabled: true,
             ..default()
         },
         
         Transform::from_rotation(Quat::from_euler(
         EulerRot::XYZ,
-            -3.14/2.5,
-            0.0,
-            0.0
+            config.light_direct.x,
+            config.light_direct.y,
+            config.light_direct.z,
         ))
     ));
 
+    for mut window in windows.iter_mut() {
+        if config.vsync { window.present_mode = PresentMode::AutoVsync }
+        else {window.present_mode = PresentMode::AutoNoVsync }
+    }
+
+    commands.insert_resource(BlocksHandler::new(&assets, config.blocks.clone()));
     commands.insert_resource(AmbientLight {
-        color: Color::srgb_u8(210, 220, 240),
-        brightness: 1.0,
+        color: Color::Srgba(config.ambient_color),
+        brightness: config.ambient_brightness,
         ..default()
     });
 
@@ -79,7 +91,8 @@ pub const MAX_TASKS: usize = 4;
 // Begin tasks
 pub fn begin(
     mut controller: ResMut<Controller>,
-    camera_query: Query<Ref<Transform>, With<Camera3d>>
+    camera_query: Query<Ref<Transform>, With<Camera3d>>,
+    handler: Res<BlocksHandler>
 ) {
     let task_pool = ComputeTaskPool::get();
     let camera_chunk = RawChunk::global(camera_query.single().translation);
@@ -88,29 +101,29 @@ pub fn begin(
         println!("Load: {}; Build: {};", controller.load.len(), controller.build.len());
     }
 
-    // Sort chunks & meshes
-    controller.load.sort_by(|a, b| 
-        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
-    controller.build.sort_by(|a, b| 
-        a.distance_squared(camera_chunk).cmp(&b.distance_squared(camera_chunk)));
-
     // chunks queue
     let l = (MAX_TASKS - controller.load_tasks.len()).min(controller.load.len());
-    let data: Vec<_> = controller.load.drain(0..l).collect();
-    for pos in data {
-        controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(pos)));
+    let mut to_remove = Vec::new();
+    for i in 0..l {
+        let pos = controller.load[i];
+        controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(handler.clone(), pos)));
+        to_remove.push(pos);
     }
+    for pos in to_remove { controller.load.remove(&pos); }
 
     // meshes queue
     let b = (MAX_TASKS - controller.build_tasks.len()).min(controller.build.len());
-    let data: Vec<_> = controller.build.drain(0..b).collect();
-    for pos in data {
+    
+    let mut to_remove = Vec::new();
+    for i in 0..b {
+        let pos = controller.build[i];
         if let Some(refs) = controller.refs(pos) {
-            controller.build_tasks.insert(pos, task_pool.spawn(ChunkMesh::build(refs)));
-        } else {
-            controller.build.push(pos);
+            controller.build_tasks.insert(pos, task_pool.spawn(ChunkMesh::build(handler.clone(), refs)));
+            to_remove.push(pos);
         }
     }
+    
+    for pos in to_remove { controller.build.remove(&pos); }
 }
 
 pub fn join(
@@ -118,7 +131,7 @@ pub fn join(
     mut controller: ResMut<Controller>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ChunkMaterial>>,
-    global_texture: ResMut<GlobalTexture>
+    blocks: Res<BlocksHandler>,
 ) {
     // join chunks; run mesh builder
     let data: Vec<_> = controller.load_tasks.drain().collect();
@@ -145,7 +158,7 @@ pub fn join(
             let entity = commands.spawn((
                 Aabb::from_min_max(Vec3::ZERO, Vec3::splat(RawChunk::SIZE_F32)),
                 Mesh3d(handler),
-                MeshMaterial3d(materials.add(ChunkMaterial::new(global_texture.clone()))),
+                MeshMaterial3d(materials.add(ChunkMaterial::new(&blocks))),
                 Transform::from_translation(pos.as_vec3() * Vec3::splat(RawChunk::SIZE_F32))
             )).id();
 
@@ -158,14 +171,17 @@ pub fn join(
 
 pub fn hot_reload(
     mut controller: ResMut<Controller>,
+    cameras: Query<Ref<Transform>, With<Camera3d>>,
     mut commands: Commands,
     mut images: EventReader<AssetEvent<Image>>,
 ) {
     if !images.is_empty() {
         for (pos, entity) in controller.meshes.drain().collect::<Vec<_>>() {
             commands.entity(entity).despawn();
-            controller.build.push(pos);
+            controller.build.insert(pos);
         }
+        let current = RawChunk::global(cameras.single().translation);
+        controller.sort(current);
 
         images.clear();
     }

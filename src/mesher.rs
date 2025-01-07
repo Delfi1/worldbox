@@ -75,32 +75,42 @@ impl Face {
         Self { x, y }
     }
 
-    pub fn vertices(self, dir: Direction, axis: i32, block: Block) -> Vec<Vertex> {
-        let axis = axis + dir.negate_axis();
-        let face = block.uvs(dir.to_u32());
+    pub const UVS: [UVec2; 4] = [
+        UVec2::new(1, 1),
+        UVec2::new(0, 1),
+        UVec2::new(0, 0),
+        UVec2::new(1, 0)
+    ];
 
+    pub fn vertices(self, dir: Direction, axis: i32, block: u8) -> Vec<Vertex> {
+        let axis = axis + dir.negate_axis();
+        
         let v1 = Vertex::new(
             dir.world_sample(axis, self.x, self.y), 
             dir,
-            face[0]
+            block as u32,
+            &Self::UVS[0]
         );
 
         let v2 = Vertex::new(
             dir.world_sample(axis, self.x + 1, self.y), 
             dir,
-            face[1]
+            block as u32,
+            &Self::UVS[1]
         );
 
         let v3 = Vertex::new(
             dir.world_sample(axis, self.x + 1, self.y + 1), 
             dir,
-            face[2]
+            block as u32,
+            &Self::UVS[2]
         );
 
         let v4 = Vertex::new(
             dir.world_sample(axis, self.x, self.y + 1), 
             dir,
-            face[3]
+            block as u32,
+            &Self::UVS[3]
         );
         
         let mut new = std::collections::VecDeque::from([v1, v2, v3, v4]);
@@ -117,19 +127,20 @@ impl Face {
 /// [6]bits - X
 /// [6]bits - Y
 /// [6]bits - Z
-/// [3]bits - Face && Uy
-/// [10]bits - UVx
+/// [3]bits - Face
+/// [7]bits - texture_x
 #[derive(Debug, Clone, Copy)]
 pub struct Vertex(u32);
 
 impl Vertex {
-    pub fn new(local: IVec3, dir: Direction, uv: UVec2) -> Self {
+    pub fn new(local: IVec3, dir: Direction, block: u32, uv: &UVec2) -> Self {
         let data = local.x as u32
         | (local.y as u32) << 6u32
         | (local.z as u32) << 12u32
         | (dir.to_u32()) << 18u32
-        | (uv.x) << 21u32
-        | (uv.y) << 28u32;
+        | (block) << 21u32 // Block id also texture id in binding array 
+        | (uv.x) << 28u32  // uv May be only 0 or 1
+        | (uv.y) << 29u32; 
         
         Self(data)
     }
@@ -143,26 +154,22 @@ pub struct ChunkMesh {
 }
 
 impl ChunkMesh {
-    fn make_vertices(dir: Direction, refs: &ChunksRefs) -> Vec<Vertex> {
+    fn make_vertices(dir: Direction, handler: &BlocksHandler, refs: &ChunksRefs) -> Vec<Vertex> {
         let mut vertices = Vec::with_capacity(512);
         let size = RawChunk::SIZE_I32;
 
         // Culled meshser
         for axis in 0..size {
-            for block in Block::meshables() {
-                for i in 0..size.pow(2) {
-                    let row = i % size;
-                    let column = i / size;
-                    let pos = dir.world_sample(axis, row, column);
-                    let (current, neg_z) =
-                        (refs.get_block(pos), refs.get_block(pos + dir.air_sample()));
+            for i in 0..size.pow(2) {
+                let row = i % size;
+                let column = i / size;
+                let pos = dir.world_sample(axis, row, column);
+                let (current, neg_z) =
+                    (refs.get_block(pos), refs.get_block(pos + dir.air_sample()));
 
-                    if current != block { continue; }
-                    // if meshable
-                    if current.is_meshable() && !neg_z.is_meshable() {
-                        let face = Face::new(row, column);
-                        vertices.extend(face.vertices(dir, axis, block));
-                    }
+                if handler.is_meshable(current) && !handler.is_meshable(neg_z) {
+                    let face = Face::new(row, column);
+                    vertices.extend(face.vertices(dir, axis, current));
                 }
             }
         }
@@ -170,13 +177,13 @@ impl ChunkMesh {
         vertices
     }
 
-    pub async fn build(refs: ChunksRefs) -> Option<Mesh> {
+    pub async fn build(handler: BlocksHandler, refs: ChunksRefs) -> Option<Mesh> {
         let mut mesh = Self::default();
 
         // Apply all directions
         for dir in Direction::iter() {
-            mesh.vertices.extend(Self::make_vertices(dir, &refs));
-        }
+            mesh.vertices.extend(Self::make_vertices(dir, &handler, &refs));
+        }           
         
         if !mesh.vertices.is_empty() {
             Some(mesh.spawn())

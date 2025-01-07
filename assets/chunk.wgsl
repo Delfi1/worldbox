@@ -23,13 +23,8 @@
 #import bevy_pbr::pbr_types::pbr_input_new
 #import bevy_pbr::prepass_utils
 
-struct ChunkMaterial {
-    roughness: f32
-};
-
-@group(2) @binding(0) var<uniform> chunk_material: ChunkMaterial;
-@group(2) @binding(1) var texture: texture_2d<f32>;
-@group(2) @binding(2) var texture_sampler: sampler;
+@group(2) @binding(0) var textures: binding_array<texture_2d_array<f32>>;
+@group(2) @binding(1) var nearest_sampler: sampler;
 
 struct Vertex {
     @builtin(instance_index) instance_index: u32,
@@ -41,7 +36,9 @@ struct VertexOutput {
     @location(0) world_normal: vec3<f32>,
     @location(1) world_position: vec4<f32>,
     @location(2) uv: vec2<f32>,
-    @location(4) instance_index: u32,
+    @location(3) b: u32,
+    @location(4) side: u32,
+    @location(5) instance_index: u32,
 };
 
 var<private> normals: array<vec3<f32>, 6> = array<vec3<f32>,6> (
@@ -65,8 +62,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let y = f32(vertex.data >> 6u & x_bits(6u));
     let z = f32(vertex.data >> 12u & x_bits(6u));
     let normal_index = vertex.data >> 18u & x_bits(3u);
-    let uvx = vertex.data >> 21u & x_bits(7u);
-    let uvy = vertex.data >> 28u & x_bits(3u);
+    let b = vertex.data >> 21u & x_bits(7u);
+    let uvx = vertex.data >> 28u & x_bits(1u);
+    let uvy = vertex.data >> 29u & x_bits(1u);
 
     let local_position = vec4<f32>(x, y, z, 1.0);
     let world_position = get_world_from_local(vertex.instance_index) * local_position;
@@ -79,7 +77,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
     let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
-    out.uv = vec2(f32(uvx)/256.0, f32(uvy)/6.0);
+    out.uv = vec2(f32(uvx), f32(uvy));
+    out.b = b;
+    out.side = normal_index;
     out.instance_index = vertex.instance_index;
     return out;
 }
@@ -89,7 +89,7 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     var pbr_input = pbr_input_new();
 
     pbr_input.flags = mesh[input.instance_index].flags;
-    pbr_input.material.base_color = textureSample(texture, texture_sampler, input.uv);
+    pbr_input.material.base_color = textureSample(textures[input.b], nearest_sampler, input.uv, input.side);
 
     pbr_input.V = calculate_view(input.world_position, false);
     pbr_input.frag_coord = input.clip_position;
@@ -108,7 +108,7 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
 #endif
 
     pbr_input.material.reflectance = 0.0;
-    pbr_input.material.perceptual_roughness = chunk_material.roughness;
+    pbr_input.material.perceptual_roughness = 0.3;
     pbr_input.material.metallic = 0.0;
 
 #ifdef PREPASS_PIPELINE

@@ -1,0 +1,17 @@
+vsync: true
+light_direct:
+- -1.256
+- 0.0
+- 0.0
+illuminance: 2000.0
+ambient_color:
+  red: 0.8235294
+  green: 0.8627451
+  blue: 0.9411765
+  alpha: 1.0
+ambient_brightness: 1.0
+blocks:
+  3: stone.png
+  1: dirt.png
+  0: null
+  2: grass.png

@@ -1,61 +1,63 @@
 //! Main chunks objects data;
 
 use std::sync::*;
-use bevy::prelude::*;
-use strum::IntoEnumIterator;
+use std::collections::HashMap;
+use bevy::{
+    prelude::*,
+    asset::*,
+};
+use serde::{Serialize, Deserialize};
 use rand::seq::SliceRandom;
+
 fn random<T>(vec: &Vec<T>) -> &T {
     vec.choose(&mut rand::thread_rng()).unwrap()
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
-#[derive(strum::EnumIter)]
-#[repr(u8)]
-pub enum Block {
-    Air, 
-    Dirt,
-    Grass, 
-    Stone
+#[derive(Clone, Serialize, Deserialize)]
+// Contains all blocks data by id
+// todo: Change option to Model Type
+pub struct Blocks(HashMap<u8, Option<AssetPath<'static>>>);
+
+impl Default for Blocks {
+    fn default() -> Self {
+        Self(HashMap::from([
+            (0, None),
+            (1, Some("dirt.png".into())),
+            (2, Some("grass.png".into())),
+            (3, Some("stone.png".into())),
+        ]))
+    }
 }
 
-impl Block {
-    /// Return all meshsable block types
-    pub fn meshables() -> Vec<Block> {
-        Block::iter().filter(|b| b.is_meshable()).collect()
+#[derive(Resource, Clone)]
+pub struct BlocksHandler(Arc<HashMap<u8, Option<Handle<Image>>>>);
+
+impl BlocksHandler {
+    pub fn new(assets: &AssetServer, blocks: Blocks) -> Self {
+        let data = blocks.0.into_iter()
+            .map(|(i, o)| (i, o.and_then(|path| Some(assets.load(path)))));
+
+        Self(Arc::new(HashMap::from_iter(data)))
     }
 
-    pub fn is_meshable(&self) -> bool {
-        match self {
-            Self::Air => false,
-            _ => true
-        }
+    pub fn textures(&self) -> Vec<&Option<Handle<Image>>> {
+        self.0.values().collect()
     }
 
+    pub fn is_meshable(&self, block: u8) -> bool {
+        self.0.get(&block).unwrap().is_some()
+    }
 
     /// Returns all blocks vec
-    pub fn all() -> Vec<Block> {
-        Block::iter().collect()
-    }
-
-    pub const fn uvs(self, dir: u32) -> [UVec2; 4] {
-        let id = (self as u8) as u32;
-        let dir = dir as u32;
-        // "0-index" positions
-        let (x, y) = (id, dir);
-        
-        [
-         UVec2::new(x+1, y+1),
-         UVec2::new(x, y+1),
-         UVec2::new(x, y),
-         UVec2::new(x+1, y),
-        ]
+    pub fn all(&self) -> Vec<u8> {
+        self.0.keys().copied().collect()
     }
 }
 
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 /// Chunks contains data in YXZ coordinate
-pub struct RawChunk(Vec<Block>);
+pub struct RawChunk(Vec<u8>);
 
 impl RawChunk {
     pub const SIZE: usize = 32;
@@ -76,39 +78,31 @@ impl RawChunk {
         (x + y + z) as usize
     }
 
-    pub async fn generate(pos: IVec3) -> Self {
+    pub async fn generate(_handler: BlocksHandler, pos: IVec3) -> Self {
         let mut chunk = Self::empty();
-        let blocks = Block::all();
 
-        for x in 0..Self::SIZE_I32 {
-            for z in 0..Self::SIZE_I32 {
-                for y in 0..Self::SIZE_I32 {
-                    if y % 8 == 0 && x % 8 == 0 && z % 8 == 0 {
-                        let i = Self::block_index(IVec3::new(x, y, z));
-                        
-                        // get random block
-                        chunk.get_mut()[i] = random(&blocks).clone();
-                    }
-                }
+        if pos.y == 0 {
+            for i in 0..Self::SIZE.pow(2) {
+                chunk.get_mut()[i] = 1;
             }
         }
-        
-        return chunk
-    }   
+
+        chunk
+    }
 
     /// Create a chunk filled with block
-    pub fn filled(block: Block) -> Self {
+    pub fn filled(block: u8) -> Self {
         Self(std::iter::repeat_n(block, Self::SIZE_P3).collect())
     }
 
-    // Same as RawChunk::filled(Block::Air)
+    // Same as RawChunk::filled(0)
     pub fn empty() -> Self {
-        Self::filled(Block::Air)
+        Self::filled(0)
     }
 
-    pub fn get(&self) -> &Vec<Block> { &self.0 }
+    pub fn get(&self) -> &Vec<u8> { &self.0 }
 
-    pub fn get_mut(&mut self) -> &mut Vec<Block> { &mut self.0 }
+    pub fn get_mut(&mut self) -> &mut Vec<u8> { &mut self.0 }
 }
 
 // All voxels pocket data
@@ -178,7 +172,7 @@ impl ChunksRefs {
         RawChunk::block_index(IVec3::new(bx, by, bz))
     }
 
-    pub fn get_block(&self, pos: IVec3) -> Block {
+    pub fn get_block(&self, pos: IVec3) -> u8 {
         let x = (pos.x + Self::SIZE_I32) as usize;
         let y = (pos.y + Self::SIZE_I32) as usize;
         let z = (pos.z + Self::SIZE_I32) as usize;

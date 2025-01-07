@@ -1,39 +1,111 @@
+use std::num::NonZero;
+
 use bevy::{
     prelude::*,
     image::*,
+    asset::*,
     pbr::*,
     render::{
         mesh::*,
-        render_resource::*,
+        texture::*,
+        render_resource::{
+            binding_types::{sampler, texture_2d_array},
+            *,
+        },
+        render_asset::*,
     }
 };
 
-#[derive(Resource, Clone)]
-pub struct GlobalTexture(pub Handle<Image>);
-
-impl GlobalTexture {
-    pub fn inner(&self) -> Handle<Image> {
-        self.0.clone()
-    }
-}
+use crate::BlocksHandler;
 
 pub const ATTRIBUTE_DATA: MeshVertexAttribute =
     MeshVertexAttribute::new("data", 536618, VertexFormat::Uint32);
 
-#[derive(Clone, Asset, Reflect, AsBindGroup, Debug)]
+//todo: make custom bind group
+#[derive(Clone, Asset, Reflect, Debug)]
 pub struct ChunkMaterial {
-    #[uniform(0)]
-    pub roughness: f32,
-    #[texture(1)]
-    #[sampler(2)]
-    texture: Handle<Image>,
+    textures: Vec<Option<Handle<Image>>>,
+}
+
+/// Set max textures bind group lenght
+pub const MAX_TEXTURES: usize = u8::MAX as usize;
+
+impl AsBindGroup for ChunkMaterial {
+    type Data = ();
+    type Param = (Res<'static, RenderAssets<GpuImage>>, Res<'static, FallbackImage>);
+
+    fn as_bind_group(
+        &self,
+        layout: &BindGroupLayout,
+        render_device: &bevy::render::renderer::RenderDevice,
+        param: &mut bevy::ecs::system::SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
+        let mut images = vec![];
+
+        for handle_opt in self.textures.iter().take(MAX_TEXTURES) {
+            let Some(handle) = handle_opt else {
+                images.push(None);
+                continue;
+            };
+
+            match param.0.get(handle) {
+                Some(image) => {images.push(Some(image))},
+                None => return Err(AsBindGroupError::RetryNextUpdate),
+            }
+        }
+        
+        let fallback_image = &param.1.d2_array;
+        let textures = vec![&fallback_image.texture_view; MAX_TEXTURES];
+        let mut textures: Vec<_> = textures.into_iter().map(|texture| &**texture).collect();
+        for (id, image_opt) in images.into_iter().enumerate() {
+            if let Some(image) = image_opt {
+                textures[id] = &*image.texture_view;
+            }
+        }
+
+        let bind_group = render_device.create_bind_group(
+            "chunk_bind_group",
+            layout,
+            &BindGroupEntries::sequential((&textures[..], &fallback_image.sampler)),
+        );
+
+        Ok(PreparedBindGroup {
+            bindings: vec![],
+            bind_group,
+            data: (),
+        })
+    }
+
+    fn unprepared_bind_group(
+        &self,
+        layout: &BindGroupLayout,
+        render_device: &bevy::render::renderer::RenderDevice,
+        param: &mut bevy::ecs::system::SystemParamItem<'_, '_, Self::Param>,
+    ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
+        Ok(UnpreparedBindGroup {
+            bindings: vec![],
+            data: ()
+        })
+    }
+
+    fn bind_group_layout_entries(render_device: &bevy::render::renderer::RenderDevice) -> Vec<BindGroupLayoutEntry>
+        where Self: Sized {
+            BindGroupLayoutEntries::with_indices(
+            ShaderStages::FRAGMENT,
+            (
+                (0, texture_2d_array(TextureSampleType::Float { filterable: true })
+                        .count(NonZero::<u32>::new(MAX_TEXTURES as u32).unwrap())),
+                (1, sampler(SamplerBindingType::Filtering)),
+            ),
+        )
+        .to_vec()
+    }
 }
 
 impl ChunkMaterial {
-    pub fn new(texture: GlobalTexture) -> Self {
+    pub fn new(handler: &BlocksHandler) -> Self {
         Self {
-            roughness: 0.3,
-            texture: texture.inner()
+            textures: handler.textures().into_iter().cloned().collect()
         }
     }
 }
@@ -64,29 +136,30 @@ impl Material for ChunkMaterial {
     }
 }
 
-fn init(
-    mut commands: Commands,
-    assets: ResMut<AssetServer>,    
+fn proceed_textures(
+    assets: Res<AssetServer>,
+    blocks: Res<BlocksHandler>,
+    mut images: ResMut<Assets<Image>>,
 ) {
-    commands.insert_resource(
-        GlobalTexture(assets.load_with_settings("textures.png", |s: &mut _| {
-            *s = ImageLoaderSettings {
-                sampler: ImageSampler::Descriptor(ImageSamplerDescriptor {
-                    mag_filter: ImageFilterMode::Nearest,
-                    min_filter: ImageFilterMode::Nearest,
-                    mipmap_filter: ImageFilterMode::Nearest,
-                    lod_max_clamp: 0.0,
-                    ..default()
-                }),
-                ..default()
-            }
-        },)));
+    let textures: Vec<_> = blocks.textures().iter().filter(|t| t.is_some())
+        .map(|t| t.as_ref().unwrap()).cloned().collect();
+    
+    for texture in textures {
+        if assets.is_loaded(&texture) {
+            let image = images.get(&texture).unwrap();
+            if image.texture_descriptor.array_layer_count() != 1 { continue; }
+
+            // If image isn't proceeded yet - reinterpret
+            let image = images.get_mut(&texture).unwrap();
+            image.reinterpret_stacked_2d_as_array(6);
+        }
+    }
 }
 
 pub struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<ChunkMaterial>::default())
-            .add_systems(Startup, init);
+            .add_systems(PreUpdate, proceed_textures);
     }
 }   

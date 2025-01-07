@@ -29,5 +29,6 @@ features = ["dynamic_linking", "wayland"]
 [dependencies]
 strum = {version="*", features=["derive"]}
 serde = "1.0.*"
-ron = "0.8.*"
+serde_yaml = "*"
 rand = "0.8.*"
+ordermap = "0.5.*"
