@@ -11,7 +11,7 @@ ambient_color:
   alpha: 1.0
 ambient_brightness: 1.0
 blocks:
-  3: stone.png
   1: dirt.png
-  0: null
+  3: stone.png
   2: grass.png
+  0: null
