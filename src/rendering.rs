@@ -2,8 +2,6 @@ use std::num::NonZero;
 
 use bevy::{
     prelude::*,
-    image::*,
-    asset::*,
     pbr::*,
     render::{
         mesh::*,
@@ -78,9 +76,9 @@ impl AsBindGroup for ChunkMaterial {
 
     fn unprepared_bind_group(
         &self,
-        layout: &BindGroupLayout,
-        render_device: &bevy::render::renderer::RenderDevice,
-        param: &mut bevy::ecs::system::SystemParamItem<'_, '_, Self::Param>,
+        _layout: &BindGroupLayout,
+        _render_device: &bevy::render::renderer::RenderDevice,
+        _param: &mut bevy::ecs::system::SystemParamItem<'_, '_, Self::Param>,
     ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
         Ok(UnpreparedBindGroup {
             bindings: vec![],
@@ -88,7 +86,7 @@ impl AsBindGroup for ChunkMaterial {
         })
     }
 
-    fn bind_group_layout_entries(render_device: &bevy::render::renderer::RenderDevice) -> Vec<BindGroupLayoutEntry>
+    fn bind_group_layout_entries(_render_device: &bevy::render::renderer::RenderDevice) -> Vec<BindGroupLayoutEntry>
         where Self: Sized {
             BindGroupLayoutEntries::with_indices(
             ShaderStages::FRAGMENT,

@@ -20,8 +20,6 @@ use fps::*;
 use serde::{Serialize, Deserialize};
 use ordermap::OrderSet;
 
-// todo: fix render textures outline bug;
-
 /// Config Data
 #[derive(Resource)]
 #[derive(Serialize, Deserialize)]

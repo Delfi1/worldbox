@@ -31,4 +31,4 @@ strum = {version="*", features=["derive"]}
 serde = "1.0.*"
 serde_yaml = "*"
 rand = "0.8.*"
-ordermap = "0.5.*"
+ordermap = { version="0.5.*", features=["serde"]}

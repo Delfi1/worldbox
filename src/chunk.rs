@@ -1,12 +1,13 @@
 //! Main chunks objects data;
 
 use std::sync::*;
-use std::collections::HashMap;
 use bevy::{
     prelude::*,
     asset::*,
+    utils::*
 };
 use serde::{Serialize, Deserialize};
+use ordermap::OrderMap;
 use rand::seq::SliceRandom;
 
 fn random<T>(vec: &Vec<T>) -> &T {
@@ -16,11 +17,11 @@ fn random<T>(vec: &Vec<T>) -> &T {
 #[derive(Clone, Serialize, Deserialize)]
 // Contains all blocks data by id
 // todo: Change option to Model Type
-pub struct Blocks(HashMap<u8, Option<AssetPath<'static>>>);
+pub struct Blocks(pub OrderMap<u8, Option<AssetPath<'static>>>);
 
 impl Default for Blocks {
     fn default() -> Self {
-        Self(HashMap::from([
+        Self(OrderMap::from([
             (0, None),
             (1, Some("dirt.png".into())),
             (2, Some("grass.png".into())),
@@ -78,12 +79,19 @@ impl RawChunk {
         (x + y + z) as usize
     }
 
-    pub async fn generate(_handler: BlocksHandler, pos: IVec3) -> Self {
+    pub async fn generate(blocks: BlocksHandler, _pos: IVec3) -> Self {
         let mut chunk = Self::empty();
-
-        if pos.y == 0 {
-            for i in 0..Self::SIZE.pow(2) {
-                chunk.get_mut()[i] = 1;
+        let blocks = blocks.all();
+        for x in 0..Self::SIZE_I32 {
+            for z in 0..Self::SIZE_I32 {
+                for y in 0..Self::SIZE_I32 {
+                    if y % 2 == 0 && x % 2 == 0 && z % 2 == 0 {
+                        let i = Self::block_index(IVec3::new(x, y, z));
+                        
+                        // get random block
+                        chunk.get_mut()[i] = random(&blocks).clone();
+                    }
+                }
             }
         }
 

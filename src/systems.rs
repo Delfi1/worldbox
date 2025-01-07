@@ -1,5 +1,3 @@
-use std::thread::current;
-
 use bevy::{
     core_pipeline::Skybox, 
     prelude::*,
@@ -91,12 +89,9 @@ pub const MAX_TASKS: usize = 4;
 // Begin tasks
 pub fn begin(
     mut controller: ResMut<Controller>,
-    camera_query: Query<Ref<Transform>, With<Camera3d>>,
     handler: Res<BlocksHandler>
 ) {
     let task_pool = ComputeTaskPool::get();
-    let camera_chunk = RawChunk::global(camera_query.single().translation);
-
     if controller.load.len() != 0 || controller.build.len() != 0 {
         println!("Load: {}; Build: {};", controller.load.len(), controller.build.len());
     }

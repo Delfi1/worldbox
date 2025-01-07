@@ -2405,6 +2405,7 @@ checksum = "62f822373a4fe84d4bb149bf54e584a7f4abec90e072ed49cda0edea5b95471f"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
+ "serde",
 ]
 
 [[package]]
@@ -3239,6 +3240,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f80a48eb68b6a7da9829b8b0429011708f775af80676a91063d023a66a656106"
 dependencies = [
  "indexmap",
+ "serde",
 ]
 
 [[package]]
