@@ -66,11 +66,11 @@ impl RawChunk {
     pub const SIZE_P3: usize = Self::SIZE.pow(3);
 
     pub fn global(pos: Vec3) -> IVec3 {
-        pos.as_ivec3() / Self::SIZE_I32
+        (pos / Self::SIZE_F32).floor().as_ivec3()
     }
 
     pub fn relative(pos: Vec3) -> IVec3 {
-        pos.as_ivec3() - Self::global(pos)*Self::SIZE_I32
+        pos.floor().as_ivec3() % Self::SIZE_I32
     }
 
     /// XZY coord system
@@ -145,6 +145,10 @@ impl ChunksRefs {
 
     pub const SIZE: usize = RawChunk::SIZE;
     pub const SIZE_I32: i32 = RawChunk::SIZE_I32;
+
+    pub fn offsets(pos: IVec3) -> Vec<IVec3> {
+        Self::OFFSETS.iter().map(|o| pos + o).collect()
+    }
 
     pub fn new(data: [Chunk; 7]) -> Self {
         Self(data)

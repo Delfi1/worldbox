@@ -27,7 +27,6 @@ pub struct MainConfig {
     pub vsync: bool,
     /// World ambient color
     pub ambient_color: Srgba,
-    pub ambient_brightness: f32,
     pub blocks: Blocks
 }
 
@@ -36,7 +35,6 @@ impl Default for MainConfig {
         Self {
             vsync: true,
             ambient_color: Srgba::rgb_u8(210, 220, 240),
-            ambient_brightness: 1.0,
             blocks: Blocks::default()
         }
     }
@@ -68,8 +66,9 @@ pub struct Controller {
     pub load: OrderSet<IVec3>,
     pub build: OrderSet<IVec3>,
 
-    /// unload queue
+    /// unload and despawn queue
     pub unload: Vec<IVec3>,
+    pub despawn: Vec<Entity>,
 
     /// Compute tasks
     load_tasks: HashMap<IVec3, Task<RawChunk>>,
@@ -78,11 +77,11 @@ pub struct Controller {
 
 impl Default for Controller {
     fn default() -> Self {
-        let n = 6;
+        let n = 8;
         let k = n-1;
 
         // Test generate chunks area
-        let mut load = OrderSet::new();
+        let mut load: OrderSet<IVec3> = OrderSet::new();
         for x in -n..n {
             for y in -n..n {
                 for z in -n..n {
@@ -109,6 +108,7 @@ impl Default for Controller {
             load, build,
             
             unload: Vec::with_capacity(512),
+            despawn: Vec::with_capacity(512),
 
             load_tasks: HashMap::new(),
             build_tasks: HashMap::new(),
@@ -131,21 +131,14 @@ impl Controller {
     }
 
     /// Reload all meshes & sort
-    pub fn reload(&mut self, pos: Vec3, commands: &mut Commands) {
-        for (pos, entity) in self.meshes.drain().collect::<Vec<_>>() {
-            commands.entity(entity).despawn();
-            self.build.insert(pos);
-        }
+    pub fn reload(&mut self, pos: Vec3) {
+        self.build.extend(self.meshes.keys().copied());
         self.sort(RawChunk::global(pos));
     }
 
-    // Rebuild one chunk
-    pub fn rebuild(&mut self, chunk: IVec3, commands: &mut Commands) {
-        if let Some(entity) = self.meshes.remove(&chunk) {
-            commands.entity(entity).despawn();
-            self.build.insert(chunk);
-            self.sort(chunk);
-        }
+    // Rebuild chunk meshes
+    pub fn rebuild(&mut self, chunk: IVec3) {
+        self.build.extend(ChunksRefs::offsets(chunk));
     }
 
     // Get chunk refs
@@ -169,7 +162,7 @@ impl Plugin for WorldPlugin {
             .add_systems(Update, systems::keybind)
             .add_systems(FixedUpdate, systems::skybox)
             .add_systems(PostUpdate, (systems::hot_reload, systems::begin).chain())
-            .add_systems(Last, systems::join);
+            .add_systems(Last, (systems::unload, systems::join).chain());
     }
 
     fn cleanup(&self, app: &mut App) {

@@ -4,7 +4,6 @@ ambient_color:
   green: 0.8627451
   blue: 0.9411765
   alpha: 1.0
-ambient_brightness: 1.0
 blocks:
   0: null
   1: dirt.png

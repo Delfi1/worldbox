@@ -19,21 +19,8 @@ pub fn setup(
     config: Res<MainConfig>,
     mut commands: Commands
 ) {
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 1800.0,
-            ..default()
-        },
-        
-        Transform::from_rotation(Quat::from_euler(
-        EulerRot::XYZ,
-            -3.14/2.5,
-            0.0,
-            0.0,
-        ))
-    ));
-
     for mut window in windows.iter_mut() {
+        window.title = "WorldBox".into();
         if config.vsync { window.present_mode = PresentMode::AutoVsync }
         else {window.present_mode = PresentMode::AutoNoVsync }
     }
@@ -41,7 +28,7 @@ pub fn setup(
     commands.insert_resource(BlocksHandler::new(&assets, config.blocks.clone()));
     commands.insert_resource(AmbientLight {
         color: Color::Srgba(config.ambient_color),
-        brightness: config.ambient_brightness,
+        brightness: 1200.0,
         ..default()
     });
 
@@ -92,10 +79,6 @@ pub fn begin(
 ) {
     let task_pool = ComputeTaskPool::get();
 
-    if controller.load.len() != 0 || controller.build.len() != 0 {
-        println!("Load: {}; Build: {};", controller.load.len(), controller.build.len());
-    }
-
     // chunks queue
     let l = (MAX_TASKS - controller.load_tasks.len()).min(controller.load.len());
     let mut to_remove = Vec::new();
@@ -119,6 +102,15 @@ pub fn begin(
     }
     
     for pos in to_remove { controller.build.remove(&pos); }
+}
+
+pub fn unload(
+    mut controller: ResMut<Controller>,
+    mut commands: Commands
+) {
+    for entity in controller.despawn.drain(..) {
+        commands.entity(entity).despawn();
+    }
 }
 
 pub fn join(
@@ -158,7 +150,7 @@ pub fn join(
             )).id();
 
             if let Some(old) = controller.meshes.insert(pos, entity) {
-                commands.entity(old).despawn();
+                controller.despawn.push(old);
             };
         }
     }
@@ -167,11 +159,10 @@ pub fn join(
 pub fn hot_reload(
     mut controller: ResMut<Controller>,
     cameras: Query<Ref<Transform>, With<Camera3d>>,
-    mut commands: Commands,
     mut images: EventReader<AssetEvent<Image>>,
 ) {
     if !images.is_empty() {
-        controller.reload(cameras.single().translation, &mut commands);
+        controller.reload(cameras.single().translation);
         images.clear();
     }
 }
@@ -180,12 +171,11 @@ pub fn keybind(
     mut controller: ResMut<Controller>,
     kbd: Res<ButtonInput<KeyCode>>,
     cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
-    mut commands: Commands,
 ) {
     let camera = cameras.single().translation();
     
     if kbd.just_pressed(KeyCode::KeyR) {
-        controller.reload(camera, &mut commands);
+        controller.reload(camera);
     }
 
     if kbd.just_pressed(KeyCode::KeyF) {
@@ -194,8 +184,8 @@ pub fn keybind(
 
         if let Some(chunk) = controller.chunks.get(&global).cloned() {
             let mut guard = chunk.write();
-            guard.get_mut()[RawChunk::block_index(relative)] = 1;
-            controller.rebuild(global, &mut commands);
+            guard.get_mut()[RawChunk::block_index(relative)] = 2;
+            controller.rebuild(global);
         }
     }
 }

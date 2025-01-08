@@ -1,24 +1,10 @@
 #import bevy_pbr::{
-    pbr_fragment::pbr_input_from_standard_material,
-    pbr_functions::alpha_discard
-}
-
-#ifdef PREPASS_PIPELINE
-#import bevy_pbr::{
-    prepass_io::{FragmentOutput},
-    pbr_deferred_functions::deferred_output,
-}
-#else
-#import bevy_pbr::{
     forward_io::{FragmentOutput},
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
 }
-#endif
 
 #import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip, mesh_normal_local_to_world}
 #import bevy_pbr::pbr_functions::{calculate_view, prepare_world_normal}
-#import bevy_pbr::mesh_view_bindings
-#import bevy_pbr::mesh_bindings
 #import bevy_pbr::mesh_bindings::mesh
 #import bevy_pbr::pbr_types::pbr_input_new
 #import bevy_pbr::prepass_utils
@@ -48,7 +34,7 @@ var<private> normals: array<vec3<f32>, 6> = array<vec3<f32>,6> (
     vec3<f32>(-1.0, 0.0, 0.0),  // Left
 	vec3<f32>(1.0, 0.0, 0.0),   // Right
 	vec3<f32>(0.0, 0.0, -1.0),  // Forward
-	vec3<f32>(0.0, 0.0, 1.0),    // Back
+	vec3<f32>(0.0, 0.0, 1.0),   // Back
     vec3<f32>(0.0, -1.0, 0.0),  // Down
 );
 
@@ -75,8 +61,15 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         local_position,
     );
 
-    out.world_position = world_position;
+#ifdef VERTEX_TANGENTS
+    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(
+        model,
+        vertex.tangent,
+        vertex.instance_index
+    );
+#endif
 
+    out.world_position = world_position;
     let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
     out.uv = vec2(f32(uvx), f32(uvy));
@@ -114,8 +107,7 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
 #endif
 
     var out: FragmentOutput;
-    // apply lighting
-    out.color = tone_mapping(apply_pbr_lighting(pbr_input), view.color_grading);
 
+    out.color = tone_mapping(apply_pbr_lighting(pbr_input), view.color_grading);
     return out;
 }
