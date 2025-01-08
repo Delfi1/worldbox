@@ -25,6 +25,7 @@ impl Default for Blocks {
             (1, Some("dirt.png".into())),
             (2, Some("grass.png".into())),
             (3, Some("stone.png".into())),
+            (4, Some("brick.png".into())),
         ]))
     }
 }
