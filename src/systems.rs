@@ -21,16 +21,15 @@ pub fn setup(
 ) {
     commands.spawn((
         DirectionalLight {
-            illuminance: config.illuminance,
-            //shadows_enabled: true,
+            illuminance: 1800.0,
             ..default()
         },
         
         Transform::from_rotation(Quat::from_euler(
         EulerRot::XYZ,
-            config.light_direct.x,
-            config.light_direct.y,
-            config.light_direct.z,
+            -3.14/2.5,
+            0.0,
+            0.0,
         ))
     ));
 
@@ -92,6 +91,7 @@ pub fn begin(
     handler: Res<BlocksHandler>
 ) {
     let task_pool = ComputeTaskPool::get();
+
     if controller.load.len() != 0 || controller.build.len() != 0 {
         println!("Load: {}; Build: {};", controller.load.len(), controller.build.len());
     }
@@ -171,13 +171,31 @@ pub fn hot_reload(
     mut images: EventReader<AssetEvent<Image>>,
 ) {
     if !images.is_empty() {
-        for (pos, entity) in controller.meshes.drain().collect::<Vec<_>>() {
-            commands.entity(entity).despawn();
-            controller.build.insert(pos);
-        }
-        let current = RawChunk::global(cameras.single().translation);
-        controller.sort(current);
-
+        controller.reload(cameras.single().translation, &mut commands);
         images.clear();
+    }
+}
+
+pub fn keybind(
+    mut controller: ResMut<Controller>,
+    kbd: Res<ButtonInput<KeyCode>>,
+    cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
+    mut commands: Commands,
+) {
+    let camera = cameras.single().translation();
+    
+    if kbd.just_pressed(KeyCode::KeyR) {
+        controller.reload(camera, &mut commands);
+    }
+
+    if kbd.just_pressed(KeyCode::KeyF) {
+        let global = RawChunk::global(camera);
+        let relative = RawChunk::relative(camera);
+
+        if let Some(chunk) = controller.chunks.get(&global).cloned() {
+            let mut guard = chunk.write();
+            guard.get_mut()[RawChunk::block_index(relative)] = 1;
+            controller.rebuild(global, &mut commands);
+        }
     }
 }

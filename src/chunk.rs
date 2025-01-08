@@ -4,13 +4,12 @@ use std::sync::*;
 use bevy::{
     prelude::*,
     asset::*,
-    utils::*
 };
 use serde::{Serialize, Deserialize};
 use ordermap::OrderMap;
 use rand::seq::SliceRandom;
 
-fn random<T>(vec: &Vec<T>) -> &T {
+fn _random<T>(vec: &Vec<T>) -> &T {
     vec.choose(&mut rand::thread_rng()).unwrap()
 }
 
@@ -31,14 +30,14 @@ impl Default for Blocks {
 }
 
 #[derive(Resource, Clone)]
-pub struct BlocksHandler(Arc<HashMap<u8, Option<Handle<Image>>>>);
+pub struct BlocksHandler(Arc<OrderMap<u8, Option<Handle<Image>>>>);
 
 impl BlocksHandler {
     pub fn new(assets: &AssetServer, blocks: Blocks) -> Self {
         let data = blocks.0.into_iter()
             .map(|(i, o)| (i, o.and_then(|path| Some(assets.load(path)))));
 
-        Self(Arc::new(HashMap::from_iter(data)))
+        Self(Arc::new(OrderMap::from_iter(data)))
     }
 
     pub fn textures(&self) -> Vec<&Option<Handle<Image>>> {
@@ -67,11 +66,15 @@ impl RawChunk {
     pub const SIZE_P3: usize = Self::SIZE.pow(3);
 
     pub fn global(pos: Vec3) -> IVec3 {
-        pos.as_ivec3() / IVec3::splat(Self::SIZE_I32)
+        pos.as_ivec3() / Self::SIZE_I32
+    }
+
+    pub fn relative(pos: Vec3) -> IVec3 {
+        pos.as_ivec3() - Self::global(pos)*Self::SIZE_I32
     }
 
     /// XZY coord system
-    fn block_index(pos: IVec3) -> usize {
+    pub fn block_index(pos: IVec3) -> usize {
         let x = pos.x % Self::SIZE_I32;
         let z = pos.z * Self::SIZE_I32;
         let y = pos.y * Self::SIZE_I32.pow(2);
@@ -79,22 +82,13 @@ impl RawChunk {
         (x + y + z) as usize
     }
 
-    pub async fn generate(blocks: BlocksHandler, _pos: IVec3) -> Self {
+    pub async fn generate(_blocks: BlocksHandler, pos: IVec3) -> Self {
         let mut chunk = Self::empty();
-        let blocks = blocks.all();
-        for x in 0..Self::SIZE_I32 {
-            for z in 0..Self::SIZE_I32 {
-                for y in 0..Self::SIZE_I32 {
-                    if y % 2 == 0 && x % 2 == 0 && z % 2 == 0 {
-                        let i = Self::block_index(IVec3::new(x, y, z));
-                        
-                        // get random block
-                        chunk.get_mut()[i] = random(&blocks).clone();
-                    }
-                }
+        if pos.y == 0 {
+            for i in 0..Self::SIZE.pow(2)*2 {
+                chunk.get_mut()[i] = 2;
             }
         }
-
         chunk
     }
 

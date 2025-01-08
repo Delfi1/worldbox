@@ -1,9 +1,4 @@
 vsync: true
-light_direct:
-- -1.15
-- 0.0
-- 0.0
-illuminance: 2000.0
 ambient_color:
   red: 0.8235294
   green: 0.8627451

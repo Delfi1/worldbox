@@ -22,6 +22,8 @@
 #import bevy_pbr::mesh_bindings::mesh
 #import bevy_pbr::pbr_types::pbr_input_new
 #import bevy_pbr::prepass_utils
+#import bevy_pbr::mesh_view_bindings::view
+#import bevy_core_pipeline::tonemapping::tone_mapping
 
 @group(2) @binding(0) var textures: binding_array<texture_2d_array<f32>>;
 @group(2) @binding(1) var nearest_sampler: sampler;
@@ -101,24 +103,19 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
         false,
     );
 
+    pbr_input.material.metallic = 0.0;
+    pbr_input.material.perceptual_roughness = 1.0;
+    pbr_input.material.reflectance = 0.0;
+
 #ifdef LOAD_PREPASS_NORMALS
     pbr_input.N = prepass_utils::prepass_normal(input.clip_position, 0u);
 #else
     pbr_input.N = normalize(pbr_input.world_normal);
 #endif
 
-    pbr_input.material.reflectance = 0.0;
-    pbr_input.material.perceptual_roughness = 0.3;
-    pbr_input.material.metallic = 0.0;
-
-#ifdef PREPASS_PIPELINE
-    let out = deferred_output(in, pbr_input);
-#else
     var out: FragmentOutput;
     // apply lighting
-    out.color = apply_pbr_lighting(pbr_input);
-    out.color = main_pass_post_lighting_processing(pbr_input, out.color);
-#endif
+    out.color = tone_mapping(apply_pbr_lighting(pbr_input), view.color_grading);
 
     return out;
 }

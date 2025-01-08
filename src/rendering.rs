@@ -26,7 +26,7 @@ pub struct ChunkMaterial {
 }
 
 /// Set max textures bind group lenght
-pub const MAX_TEXTURES: usize = u8::MAX as usize;
+pub const MAX_TEXTURES: usize = 64;
 
 impl AsBindGroup for ChunkMaterial {
     type Data = ();
@@ -40,7 +40,7 @@ impl AsBindGroup for ChunkMaterial {
     ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
         let mut images = vec![];
 
-        for handle_opt in self.textures.iter().take(MAX_TEXTURES) {
+        for handle_opt in self.textures.iter() {
             let Some(handle) = handle_opt else {
                 images.push(None);
                 continue;

@@ -25,8 +25,6 @@ use ordermap::OrderSet;
 #[derive(Serialize, Deserialize)]
 pub struct MainConfig {
     pub vsync: bool,
-    pub light_direct: Vec3,
-    pub illuminance: f32,
     /// World ambient color
     pub ambient_color: Srgba,
     pub ambient_brightness: f32,
@@ -37,8 +35,6 @@ impl Default for MainConfig {
     fn default() -> Self {
         Self {
             vsync: true,
-            light_direct: Vec3::new(-3.14/2.5, 0.0, 0.0),
-            illuminance: 2000.0,
             ambient_color: Srgba::rgb_u8(210, 220, 240),
             ambient_brightness: 1.0,
             blocks: Blocks::default()
@@ -134,6 +130,24 @@ impl Controller {
             a.distance_squared(current).cmp(&b.distance_squared(current)));
     }
 
+    /// Reload all meshes & sort
+    pub fn reload(&mut self, pos: Vec3, commands: &mut Commands) {
+        for (pos, entity) in self.meshes.drain().collect::<Vec<_>>() {
+            commands.entity(entity).despawn();
+            self.build.insert(pos);
+        }
+        self.sort(RawChunk::global(pos));
+    }
+
+    // Rebuild one chunk
+    pub fn rebuild(&mut self, chunk: IVec3, commands: &mut Commands) {
+        if let Some(entity) = self.meshes.remove(&chunk) {
+            commands.entity(entity).despawn();
+            self.build.insert(chunk);
+            self.sort(chunk);
+        }
+    }
+
     // Get chunk refs
     pub fn refs(&self, pos: IVec3) -> Option<ChunksRefs> {
         let mut data = Vec::<Chunk>::with_capacity(7);
@@ -152,13 +166,13 @@ impl Plugin for WorldPlugin {
             .insert_resource(MainConfig::load_init())
             .add_plugins((FpsPlugin, CameraPlugin, RenderingPlugin))
             .add_systems(Startup, systems::setup)
-            .add_systems(Update, systems::skybox)
+            .add_systems(Update, systems::keybind)
+            .add_systems(FixedUpdate, systems::skybox)
             .add_systems(PostUpdate, (systems::hot_reload, systems::begin).chain())
             .add_systems(Last, systems::join);
     }
 
     fn cleanup(&self, app: &mut App) {
-
         // Save config data
         app.add_systems(PostStartup, |r: Res<MainConfig>| {
             r.save();
