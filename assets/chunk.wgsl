@@ -61,14 +61,6 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         local_position,
     );
 
-#ifdef VERTEX_TANGENTS
-    out.world_tangent = mesh_functions::mesh_tangent_local_to_world(
-        model,
-        vertex.tangent,
-        vertex.instance_index
-    );
-#endif
-
     out.world_position = world_position;
     let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
@@ -86,7 +78,7 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     pbr_input.flags = mesh[input.instance_index].flags;
     pbr_input.material.base_color = textureSample(textures[input.b], nearest_sampler, input.uv, input.side);
 
-    pbr_input.V = calculate_view(input.world_position, false);
+    pbr_input.V = calculate_view(input.world_position, pbr_input.is_orthographic);
     pbr_input.frag_coord = input.clip_position;
     pbr_input.world_position = input.world_position;
 
@@ -100,11 +92,7 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     pbr_input.material.perceptual_roughness = 1.0;
     pbr_input.material.reflectance = 0.0;
 
-#ifdef LOAD_PREPASS_NORMALS
-    pbr_input.N = prepass_utils::prepass_normal(input.clip_position, 0u);
-#else
     pbr_input.N = normalize(pbr_input.world_normal);
-#endif
 
     var out: FragmentOutput;
 

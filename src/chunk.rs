@@ -2,8 +2,7 @@
 
 use std::sync::*;
 use bevy::{
-    prelude::*,
-    asset::*,
+    asset::*, prelude::*
 };
 use serde::{Serialize, Deserialize};
 use ordermap::OrderMap;
@@ -13,9 +12,16 @@ fn _random<T>(vec: &Vec<T>) -> &T {
     vec.choose(&mut rand::thread_rng()).unwrap()
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+// todo models
+pub enum ModelType {
+    Empty,
+    Meshable(AssetPath<'static>),
+    Crossed(AssetPath<'static>)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 // Contains all blocks data by id
-// todo: Change option to Model Type
 pub struct Blocks(pub OrderMap<u8, Option<AssetPath<'static>>>);
 
 impl Default for Blocks {
@@ -65,12 +71,17 @@ impl RawChunk {
     pub const SIZE_F32: f32 = Self::SIZE as f32;
     pub const SIZE_P3: usize = Self::SIZE.pow(3);
 
+    /// Get chunk global pos
     pub fn global(pos: Vec3) -> IVec3 {
         (pos / Self::SIZE_F32).floor().as_ivec3()
     }
 
+    /// Get current block pos relative to current chunk
     pub fn relative(pos: Vec3) -> IVec3 {
-        pos.floor().as_ivec3() % Self::SIZE_I32
+        (pos.floor().as_ivec3() % Self::SIZE_I32).map(|v| {
+            if v < 0 { return v + Self::SIZE_I32 }
+            return v
+        })
     }
 
     /// XZY coord system
@@ -90,6 +101,26 @@ impl RawChunk {
             }
         }
         chunk
+    }
+
+    /// Get all blocks above cursore by radius, absolute pos and vector u (camera forward)
+    pub fn under_cursor(mut current: Vec3, u: Vec3, r: usize) -> Vec<Vec3> {        
+        let delta = 0.05;
+        let mut stored = Vec::with_capacity(r);
+        let mut blocks = Vec::from([current]);
+        while blocks.len() < r {
+            current.x += u.x*delta;
+            current.y += u.y*delta;
+            current.z += u.z*delta;
+
+            let next = current.as_ivec3();
+            if !stored.contains(&next) {
+                stored.push(next);
+                blocks.push(current);
+            }
+        }
+
+        blocks
     }
 
     /// Create a chunk filled with block

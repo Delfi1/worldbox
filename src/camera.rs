@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
     input::mouse::{MouseMotion, MouseWheel},
 };
-use bevy::window::{CursorGrabMode, PrimaryWindow};
+use bevy::window::*;
 use std::f32::consts::PI;
 
 pub struct CameraController {
@@ -15,7 +15,7 @@ pub struct CameraController {
 
 impl CameraController {
     fn new() -> Self {
-        Self { speed: 12.0, sensitivity: 0.012, yaw: 0.0, pitch: 0.0 }
+        Self { speed: 12.0, sensitivity: 0.2, yaw: 0.0, pitch: 0.0 }
     }
 }
 
@@ -34,22 +34,19 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Last, camera_control.run_if(any_with_component::<PrimaryWindow>)
-        );
+        app.add_systems(Last, camera_control.run_if(any_with_component::<PrimaryWindow>));
     }
 }
 
 fn camera_control(
-    mut primary_window: Query<Mut<Window>, With<PrimaryWindow>>,
     mut cameras: Query<(Mut<MainCamera>, Mut<Transform>)>,
+    primary_window: Query<Ref<Window>, With<PrimaryWindow>>,
     time: Res<Time>,
     kbd: Res<ButtonInput<KeyCode>>,
-    mouse_buttons: Res<ButtonInput<MouseButton>>,
     mut evr_motion: EventReader<MouseMotion>,
     mut evr_scroll: EventReader<MouseWheel>,
 ) {
-    let mut window = primary_window.get_single_mut().unwrap();
+    let window = primary_window.get_single().unwrap();
     let delta_time = time.delta().as_secs_f32();
 
     let mut motion = Vec2::ZERO;
@@ -93,19 +90,12 @@ fn camera_control(
             transform.translation.y += speed * delta_time;
         }
 
-        if mouse_buttons.pressed(MouseButton::Right) {
+        if window.cursor_options.grab_mode != CursorGrabMode::None {
+            // Rotate camera
             let contr = &mut camera.controller;
-
-            window.cursor_options.visible = false;
-            window.cursor_options.grab_mode = CursorGrabMode::Locked;
-
-            contr.yaw += motion.x.to_radians() * contr.sensitivity * delta_time * 1000.0;
-            contr.pitch += motion.y.to_radians() * contr.sensitivity * delta_time * 1000.0;
-
+            contr.yaw += motion.x.to_radians() * contr.sensitivity;
+            contr.pitch += motion.y.to_radians() * contr.sensitivity;
             contr.pitch = contr.pitch.clamp(-PI/2., PI/2.);
-        } else {
-            window.cursor_options.visible = true;
-            window.cursor_options.grab_mode = CursorGrabMode::None;
         }
 
         transform.rotation = Quat::from_euler(

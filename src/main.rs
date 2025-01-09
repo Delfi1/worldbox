@@ -139,6 +139,7 @@ impl Controller {
     // Rebuild chunk meshes
     pub fn rebuild(&mut self, chunk: IVec3) {
         self.build.extend(ChunksRefs::offsets(chunk));
+        self.sort(chunk);
     }
 
     // Get chunk refs
@@ -161,6 +162,7 @@ impl Plugin for WorldPlugin {
             .add_systems(Startup, systems::setup)
             .add_systems(Update, systems::keybind)
             .add_systems(FixedUpdate, systems::skybox)
+            .add_systems(FixedPostUpdate, systems::update_selected)
             .add_systems(PostUpdate, (systems::hot_reload, systems::begin).chain())
             .add_systems(Last, (systems::unload, systems::join).chain());
     }

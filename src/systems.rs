@@ -26,6 +26,7 @@ pub fn setup(
     }
 
     commands.insert_resource(BlocksHandler::new(&assets, config.blocks.clone()));
+    commands.insert_resource(SelectedData::empty());
     commands.insert_resource(AmbientLight {
         color: Color::Srgba(config.ambient_color),
         brightness: 1200.0,
@@ -63,7 +64,7 @@ pub fn skybox(
         commands.entity(camera).insert(
             Skybox {
                 image: handler.0.clone(),
-                brightness: 1000.0,
+                brightness: 800.0,
                 ..default()
             }
         );
@@ -71,7 +72,8 @@ pub fn skybox(
 }
 
 /// Max thread tasks;
-pub const MAX_TASKS: usize = 4;
+pub const MAX_CHUNKS: usize = 8;
+pub const MAX_MESHES: usize = 4;
 // Begin tasks
 pub fn begin(
     mut controller: ResMut<Controller>,
@@ -80,7 +82,7 @@ pub fn begin(
     let task_pool = ComputeTaskPool::get();
 
     // chunks queue
-    let l = (MAX_TASKS - controller.load_tasks.len()).min(controller.load.len());
+    let l = (MAX_CHUNKS - controller.load_tasks.len()).min(controller.load.len());
     let mut to_remove = Vec::new();
     for i in 0..l {
         let pos = controller.load[i];
@@ -90,7 +92,7 @@ pub fn begin(
     for pos in to_remove { controller.load.remove(&pos); }
 
     // meshes queue
-    let b = (MAX_TASKS - controller.build_tasks.len()).min(controller.build.len());
+    let b = (MAX_MESHES - controller.build_tasks.len()).min(controller.build.len());
     
     let mut to_remove = Vec::new();
     for i in 0..b {
@@ -167,24 +169,123 @@ pub fn hot_reload(
     }
 }
 
+pub struct SelectedBlock {
+    chunk: IVec3,
+    block: usize,
+    data: u8
+}
+
+impl SelectedBlock {
+    pub fn empty() -> Self {
+        Self {
+            chunk: IVec3::ZERO,
+            block: 0,
+            data: 0
+        }
+    }
+
+    pub fn set(&mut self, chunk: IVec3, block: usize, data: u8) {
+        (self.chunk, self.block, self.data) = (chunk, block, data);
+    }
+}
+
+#[derive(Resource)]
+pub struct SelectedData {
+    pub previous: SelectedBlock,
+    pub current: SelectedBlock
+}
+
+impl SelectedData {
+    pub fn empty() -> Self {
+        Self { previous: SelectedBlock::empty(), current: SelectedBlock::empty() }
+    }
+
+    pub fn reset(&mut self) {*self = Self::empty();}
+}
+
+pub fn update_selected(
+    cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
+    controller: Res<Controller>,
+    mut selected: ResMut<SelectedData>
+) {
+    let camera = cameras.single();
+    let current = camera.translation();
+    let u = camera.forward().normalize();
+    let blocks = RawChunk::under_cursor(current, u, 32);
+    
+    // Reset selected blocks
+    selected.reset();
+    for block in blocks {
+        let chunk_pos = RawChunk::global(block);
+        let index = RawChunk::block_index(RawChunk::relative(block));
+
+        if let Some(chunk) = controller.chunks.get(&chunk_pos).cloned() {
+            let guard = chunk.read();
+            let data = guard.get()[index];
+            if data == 0 {
+                selected.previous.set(chunk_pos, index, data);
+            } else {
+                selected.current.set(chunk_pos, index, data);
+                break;
+            }
+        }
+    }
+}
+
 pub fn keybind(
     mut controller: ResMut<Controller>,
+    mut primary_window: Query<Mut<Window>, With<PrimaryWindow>>,
     kbd: Res<ButtonInput<KeyCode>>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
     cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
+    selected: Res<SelectedData>
 ) {
-    let camera = cameras.single().translation();
+    let camera = cameras.single();
     
     if kbd.just_pressed(KeyCode::KeyR) {
-        controller.reload(camera);
+        controller.reload(camera.translation());
+    }
+
+    if kbd.just_pressed(KeyCode::Escape) {
+        if let Some(mut window) = primary_window.get_single_mut().ok() {
+            if window.cursor_options.visible {
+                window.cursor_options.visible = false;
+                window.cursor_options.grab_mode = CursorGrabMode::Locked;
+            } else {
+                window.cursor_options.visible = true;
+                window.cursor_options.grab_mode = CursorGrabMode::None;
+            }
+        }
+    }
+
+    // Destroy block
+    if mouse_buttons.just_pressed(MouseButton::Left) {
+        if selected.current.data != 0 {
+            if let Some(chunk) = controller.chunks.get(&selected.current.chunk) {
+                let mut guard = chunk.write();
+                guard.get_mut()[selected.current.block] = 0;
+            }
+            controller.rebuild(selected.current.chunk);
+        }
+    }
+
+    if mouse_buttons.just_pressed(MouseButton::Right) {
+        if selected.current.data != 0 {
+            if let Some(chunk) = controller.chunks.get(&selected.previous.chunk) {
+                let mut guard = chunk.write();
+                guard.get_mut()[selected.previous.block] = 3;
+            }
+            controller.rebuild(selected.current.chunk);
+        }
     }
 
     if kbd.just_pressed(KeyCode::KeyF) {
-        let global = RawChunk::global(camera);
-        let relative = RawChunk::relative(camera);
+        let global = RawChunk::global(camera.translation());
+        let relative = RawChunk::relative(camera.translation());
 
         if let Some(chunk) = controller.chunks.get(&global).cloned() {
             let mut guard = chunk.write();
-            guard.get_mut()[RawChunk::block_index(relative)] = 2;
+            guard.get_mut()[RawChunk::block_index(relative)] = 3;
             controller.rebuild(global);
         }
     }

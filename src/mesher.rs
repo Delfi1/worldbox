@@ -183,7 +183,7 @@ impl ChunkMesh {
         // Apply all directions
         for dir in Direction::iter() {
             mesh.vertices.extend(Self::make_vertices(dir, &handler, &refs));
-        }           
+        }
         
         if !mesh.vertices.is_empty() {
             Some(mesh.spawn())
