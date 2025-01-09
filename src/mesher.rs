@@ -6,24 +6,26 @@ use bevy::render::{
     render_asset::*
 };
 
-// Also normal
+// Also face normal
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumIter)]
 pub enum Direction {
     Left, Right, Down, Up, Back, Forward
 }
 
 impl Direction {
+    /// Get block position from grid and axis
     pub fn world_sample(&self, axis: i32, row: i32, column: i32) -> IVec3 {
         match self {
-            Self::Up => IVec3::new(row, axis + 1, column),
+            Self::Up => IVec3::new(row, axis, column),
             Self::Down => IVec3::new(row, axis, column),
             Self::Left => IVec3::new(axis, column, row),
-            Self::Right => IVec3::new(axis + 1, column, row),
+            Self::Right => IVec3::new(axis, column, row),
             Self::Forward => IVec3::new(row, column, axis),
-            Self::Back => IVec3::new(row, column, axis + 1),
+            Self::Back => IVec3::new(row, column, axis),
         }
     } 
 
+    /// Get next -Z block relative pos
     pub fn air_sample(&self) -> IVec3 {
         match self {
             Self::Up => IVec3::Y,
@@ -70,11 +72,14 @@ impl Direction {
 }
 
 pub struct Face {x: i32, y: i32}
+
+/// All blocks face methods
 impl Face {
     pub fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
 
+    /// UV corners
     pub const UVS: [UVec2; 4] = [
         UVec2::new(1, 1),
         UVec2::new(0, 1),
@@ -82,9 +87,9 @@ impl Face {
         UVec2::new(1, 0)
     ];
 
-    pub fn vertices(self, dir: Direction, axis: i32, block: u8) -> Vec<Vertex> {
-        let axis = axis + dir.negate_axis();
-        
+    /// Get 
+    pub fn vertices(self, dir: Direction, mut axis: i32, block: u8) -> Vec<Vertex> {
+        axis += dir.negate_axis();
         let v1 = Vertex::new(
             dir.world_sample(axis, self.x, self.y), 
             dir,
@@ -124,11 +129,13 @@ impl Face {
 }
 
 /// Pocket of vertex data
-/// [6]bits - X
-/// [6]bits - Y
-/// [6]bits - Z
-/// [3]bits - Face
-/// [7]bits - texture_x
+/// [6]bits - X (0-63)
+/// [6]bits - Y (0-63)
+/// [6]bits - Z (0-63)
+/// [3]bits - Face (0-7)
+/// [7]bits - texture_x (0-255)
+/// [1]bit - UVx (0/1)
+/// [1]bit - UVy (0/1)
 #[derive(Debug, Clone, Copy)]
 pub struct Vertex(u32);
 
@@ -159,7 +166,8 @@ impl ChunkMesh {
         let size = RawChunk::SIZE_I32;
 
         // Culled meshser
-        for axis in 0..size {
+        let n = dir.negate_axis();
+        for axis in n..(size+n) {
             for i in 0..size.pow(2) {
                 let row = i % size;
                 let column = i / size;

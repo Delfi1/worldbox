@@ -36,6 +36,7 @@ impl Default for Blocks {
 }
 
 #[derive(Resource, Clone)]
+/// Contains all blocks assets (WIP)
 pub struct BlocksHandler(Arc<OrderMap<u8, Option<Handle<Image>>>>);
 
 impl BlocksHandler {
@@ -46,10 +47,12 @@ impl BlocksHandler {
         Self(Arc::new(OrderMap::from_iter(data)))
     }
 
+    /// Get all textures
     pub fn textures(&self) -> Vec<&Option<Handle<Image>>> {
         self.0.values().collect()
     }
 
+    /// Is texture drawable with default way?
     pub fn is_meshable(&self, block: u8) -> bool {
         self.0.get(&block).unwrap().is_some()
     }
@@ -93,21 +96,20 @@ impl RawChunk {
         (x + y + z) as usize
     }
 
+    /// Main generate function - WIP
     pub async fn generate(_blocks: BlocksHandler, pos: IVec3) -> Self {
-        let mut chunk = Self::empty();
-        if pos.y == 0 {
-            for i in 0..Self::SIZE.pow(2)*2 {
-                chunk.get_mut()[i] = 2;
-            }
+        if pos == IVec3::ZERO {
+            Self::filled(2)
+        } else {
+            Self::empty()
         }
-        chunk
     }
 
     /// Get all blocks above cursore by radius, absolute pos and vector u (camera forward)
     pub fn under_cursor(mut current: Vec3, u: Vec3, r: usize) -> Vec<Vec3> {        
-        let delta = 0.05;
+        let delta = 0.01;
         let mut stored = Vec::with_capacity(r);
-        let mut blocks = Vec::from([current]);
+        let mut blocks = Vec::with_capacity(r);
         while blocks.len() < r {
             current.x += u.x*delta;
             current.y += u.y*delta;

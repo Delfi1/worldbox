@@ -1,3 +1,5 @@
+//! Just simple debug info
+
 use bevy::diagnostic::DiagnosticsStore;
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
@@ -9,7 +11,7 @@ fn setup(
     mut commands: Commands,
 ) {
     commands.spawn((
-        Text::new("Fps: N/A"),
+        Text::new("N/A"),
         FpsText,
         Node {
             position_type: PositionType::Absolute,
@@ -22,17 +24,25 @@ fn setup(
 
 fn update(
     diagnostics: Res<DiagnosticsStore>,
-    mut query: Query<&mut Text, With<FpsText>>,
+    camera_query: Query<Ref<Transform>, With<Camera3d>>,
+    mut query: Query<Mut<Text>, With<FpsText>>,
 ) {
     if let Some(value) = diagnostics
     .get(&FrameTimeDiagnosticsPlugin::FPS).and_then(|fps| fps.smoothed()) {
+        let camera = camera_query.single();
         let mut text = query.get_single_mut().unwrap();
-        text.0 = format!("Fps: {}", value.round() as u32);
+
+        text.0 = format!(
+            "Fps: {}; \nPosition: {}; \nView: {};",
+            value.round() as u32,
+            camera.translation,
+            camera.forward().normalize()
+        );
     }
 }
 
 fn hide(
-    mut q: Query<&mut Visibility, With<FpsText>>,
+    mut q: Query<Mut<Visibility>, With<FpsText>>,
     kbd: Res<ButtonInput<KeyCode>>,
 ) {
     if kbd.just_pressed(KeyCode::F12) {
@@ -46,9 +56,9 @@ fn hide(
 
 pub struct FpsPlugin;
 impl Plugin for FpsPlugin {
-    fn build(&self, app: &mut bevy::prelude::App) {
+    fn build(&self, app: &mut App) {
         app.add_plugins(FrameTimeDiagnosticsPlugin)
             .add_systems(Startup, setup)
-            .add_systems(Update, (update, hide).chain());
+            .add_systems(FixedUpdate, (update, hide).chain());
     }
 }

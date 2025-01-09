@@ -20,6 +20,13 @@ use fps::*;
 use serde::{Serialize, Deserialize};
 use ordermap::OrderSet;
 
+// Todo:
+// 1) World load-store system
+// 2) Fix meshing system
+// 3) Update Blocks Data (Add models, collisions, tags etc)
+// 4) Player collisions with blocks
+// 5) Add normal maps option for textures
+
 /// Config Data
 #[derive(Resource)]
 #[derive(Serialize, Deserialize)]
@@ -59,6 +66,7 @@ impl MainConfig {
 }
 
 #[derive(Resource)]
+/// Main stored world chunks data
 pub struct Controller {
     pub chunks: HashMap<IVec3, chunk::Chunk>,
     pub meshes: HashMap<IVec3, Entity>,
@@ -73,6 +81,7 @@ pub struct Controller {
     /// Compute tasks
     load_tasks: HashMap<IVec3, Task<RawChunk>>,
     build_tasks: HashMap<IVec3, Task<Option<Mesh>>>,
+    need_sort: bool
 }
 
 impl Default for Controller {
@@ -112,6 +121,7 @@ impl Default for Controller {
 
             load_tasks: HashMap::new(),
             build_tasks: HashMap::new(),
+            need_sort: true
         }
     }
 }
@@ -122,24 +132,20 @@ impl Controller {
     }
     
     // sort load and build queues
-    pub fn sort(&mut self, current: IVec3) {
-        self.load.sort_by(|a, b| 
-            a.distance_squared(current).cmp(&b.distance_squared(current)));
-
-        self.build.sort_by(|a, b| 
-            a.distance_squared(current).cmp(&b.distance_squared(current)));
+    pub fn sort(&mut self) {
+        self.need_sort = true;
     }
 
     /// Reload all meshes & sort
-    pub fn reload(&mut self, pos: Vec3) {
+    pub fn reload(&mut self) {
         self.build.extend(self.meshes.keys().copied());
-        self.sort(RawChunk::global(pos));
+        self.sort();
     }
 
     // Rebuild chunk meshes
     pub fn rebuild(&mut self, chunk: IVec3) {
         self.build.extend(ChunksRefs::offsets(chunk));
-        self.sort(chunk);
+        self.sort();
     }
 
     // Get chunk refs

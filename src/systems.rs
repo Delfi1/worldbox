@@ -77,9 +77,20 @@ pub const MAX_MESHES: usize = 4;
 // Begin tasks
 pub fn begin(
     mut controller: ResMut<Controller>,
+    cameras: Query<Ref<Transform>, With<Camera3d>>,
     handler: Res<BlocksHandler>
 ) {
     let task_pool = ComputeTaskPool::get();
+
+    if controller.need_sort {
+        let current = RawChunk::global(cameras.single().translation);
+        controller.load.sort_by(|a, b| 
+            a.distance_squared(current).cmp(&b.distance_squared(current)));
+        controller.build.sort_by(|a, b| 
+            a.distance_squared(current).cmp(&b.distance_squared(current)));
+
+        controller.need_sort = false;
+    }
 
     // chunks queue
     let l = (MAX_CHUNKS - controller.load_tasks.len()).min(controller.load.len());
@@ -160,16 +171,15 @@ pub fn join(
 
 pub fn hot_reload(
     mut controller: ResMut<Controller>,
-    cameras: Query<Ref<Transform>, With<Camera3d>>,
     mut images: EventReader<AssetEvent<Image>>,
 ) {
     if !images.is_empty() {
-        controller.reload(cameras.single().translation);
+        controller.reload();
         images.clear();
     }
 }
 
-pub struct SelectedBlock {
+struct SelectedBlock {
     chunk: IVec3,
     block: usize,
     data: u8
@@ -191,8 +201,8 @@ impl SelectedBlock {
 
 #[derive(Resource)]
 pub struct SelectedData {
-    pub previous: SelectedBlock,
-    pub current: SelectedBlock
+    previous: SelectedBlock,
+    current: SelectedBlock
 }
 
 impl SelectedData {
@@ -243,7 +253,7 @@ pub fn keybind(
     let camera = cameras.single();
     
     if kbd.just_pressed(KeyCode::KeyR) {
-        controller.reload(camera.translation());
+        controller.reload();
     }
 
     if kbd.just_pressed(KeyCode::Escape) {
@@ -275,18 +285,23 @@ pub fn keybind(
                 let mut guard = chunk.write();
                 guard.get_mut()[selected.previous.block] = 3;
             }
-            controller.rebuild(selected.current.chunk);
+            controller.rebuild(selected.previous.chunk);
         }
     }
 
     if kbd.just_pressed(KeyCode::KeyF) {
-        let global = RawChunk::global(camera.translation());
-        let relative = RawChunk::relative(camera.translation());
-
-        if let Some(chunk) = controller.chunks.get(&global).cloned() {
-            let mut guard = chunk.write();
-            guard.get_mut()[RawChunk::block_index(relative)] = 3;
-            controller.rebuild(global);
-        }
+        let current = camera.translation();
+        let u = camera.forward().normalize();
+        let blocks = RawChunk::under_cursor(current, u, 32);    
+        
+        for block in blocks {
+            let chunk_pos = RawChunk::global(block);
+            let index = RawChunk::block_index(RawChunk::relative(block));
+            if let Some(chunk) = controller.chunks.get(&chunk_pos) {
+                let mut guard =  chunk.write();
+                guard.get_mut()[index] = 3;
+            }
+            controller.rebuild(chunk_pos);
+        }    
     }
 }
