@@ -14,7 +14,7 @@ use bevy::{
     }
 };
 
-use crate::BlocksHandler;
+use super::BlocksHandler;
 
 pub const ATTRIBUTE_DATA: MeshVertexAttribute =
     MeshVertexAttribute::new("data", 536618, VertexFormat::Uint32);
@@ -26,7 +26,7 @@ pub struct ChunkMaterial {
 }
 
 /// Set max textures bind group lenght
-pub const MAX_TEXTURES: usize = 64;
+pub const MAX_TEXTURES: usize = 256;
 
 impl AsBindGroup for ChunkMaterial {
     type Data = ();
@@ -47,7 +47,14 @@ impl AsBindGroup for ChunkMaterial {
             };
 
             match param.0.get(handle) {
-                Some(image) => {images.push(Some(image))},
+                Some(image) => {
+                    // Retry later if only one layer
+                    if image.texture.depth_or_array_layers() == 1 {
+                        return Err(AsBindGroupError::RetryNextUpdate);
+                    }
+
+                    images.push(Some(image))
+                },
                 None => return Err(AsBindGroupError::RetryNextUpdate),
             }
         }
@@ -100,11 +107,10 @@ impl AsBindGroup for ChunkMaterial {
     }
 }
 
+/// Default chunk mesh
 impl ChunkMaterial {
     pub fn new(handler: &BlocksHandler) -> Self {
-        Self {
-            textures: handler.textures().into_iter().cloned().collect()
-        }
+        Self { textures: handler.textures() }
     }
 }
 
@@ -117,6 +123,7 @@ impl Material for ChunkMaterial {
     }
 
     fn alpha_mode(&self) -> AlphaMode {
+        // Block face can't be transparent
         AlphaMode::Opaque
     }
 
@@ -134,30 +141,9 @@ impl Material for ChunkMaterial {
     }
 }
 
-fn proceed_textures(
-    assets: Res<AssetServer>,
-    blocks: Res<BlocksHandler>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    let textures: Vec<_> = blocks.textures().iter().filter(|t| t.is_some())
-        .map(|t| t.as_ref().unwrap()).cloned().collect();
-    
-    for texture in textures {
-        if assets.is_loaded(&texture) {
-            let image = images.get(&texture).unwrap();
-            if image.texture_descriptor.array_layer_count() != 1 { continue; }
-
-            // If image isn't proceeded yet - reinterpret
-            let image = images.get_mut(&texture).unwrap();
-            image.reinterpret_stacked_2d_as_array(6);
-        }
-    }
-}
-
 pub struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<ChunkMaterial>::default())
-            .add_systems(PreUpdate, proceed_textures);
+        app.add_plugins(MaterialPlugin::<ChunkMaterial>::default());
     }
 }   

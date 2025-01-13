@@ -31,4 +31,6 @@ strum = {version="*", features=["derive"]}
 serde = "1.0.*"
 serde_yaml = "*"
 rand = "0.8.*"
+glob = "0.3.*"
 ordermap = { version="0.5.*", features=["serde"]}
+bevy_egui = "0.32.*"

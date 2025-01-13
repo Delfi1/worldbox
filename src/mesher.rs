@@ -87,8 +87,8 @@ impl Face {
         UVec2::new(1, 0)
     ];
 
-    /// Get 
-    pub fn vertices(self, dir: Direction, mut axis: i32, block: u8) -> Vec<Vertex> {
+    /// Make vertices from face
+    pub fn vertices(self, dir: Direction, mut axis: i32, block: u16) -> Vec<Vertex> {
         axis += dir.negate_axis();
         let v1 = Vertex::new(
             dir.world_sample(axis, self.x, self.y), 
@@ -146,7 +146,7 @@ impl Vertex {
         | (local.z as u32) << 12u32
         | (dir.to_u32()) << 18u32
         | (block) << 21u32 // Block id also texture id in binding array 
-        | (uv.x) << 28u32  // uv May be only 0 or 1
+        | (uv.x) << 28u32  // UV may be only 0 or 1
         | (uv.y) << 29u32; 
         
         Self(data)

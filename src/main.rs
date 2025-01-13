@@ -3,67 +3,30 @@ mod mesher;
 mod rendering;
 mod systems;
 mod camera;
-mod fps;
+mod debug;
+mod world;
 
+use ordermap::OrderSet;
 use bevy::{
     prelude::*,
-    tasks::*, 
+    utils::*,
+    tasks::*,
+    asset::io::*,
     image::*,
-    utils::*
 };
 
 use camera::*;
 use mesher::*;
 use chunk::*;
 use rendering::*;
-use fps::*;
-use serde::{Serialize, Deserialize};
-use ordermap::OrderSet;
+use debug::*;
+use world::*;
 
 // Todo:
 // 1) World load-store system
-// 2) Fix meshing system
-// 3) Update Blocks Data (Add models, collisions, tags etc)
-// 4) Player collisions with blocks
-// 5) Add normal maps option for textures
-
-/// Config Data
-#[derive(Resource)]
-#[derive(Serialize, Deserialize)]
-pub struct MainConfig {
-    pub vsync: bool,
-    /// World ambient color
-    pub ambient_color: Srgba,
-    pub blocks: Blocks
-}
-
-impl Default for MainConfig {
-    fn default() -> Self {
-        Self {
-            vsync: true,
-            ambient_color: Srgba::rgb_u8(210, 220, 240),
-            blocks: Blocks::default()
-        }
-    }
-}
-
-impl MainConfig {
-    /// Load or init Config data
-    pub fn load_init() -> Self {
-        Self::load().unwrap_or(Self::default())
-    }
-
-    pub fn load() -> Option<Self> {
-        std::fs::read_to_string("./assets/config.yaml").ok()
-            .and_then(|s| serde_yaml::from_str(&s).ok())
-    }
-
-    pub fn save(&self) {
-        if let Ok(data) = serde_yaml::to_string(&self) {
-            let _ = std::fs::write("./assets/config.yaml", data);
-        }
-    }
-}
+// 2) Update Blocks Data (Add models, collisions, tags etc)
+// 3) Player collisions with blocks
+// 4) Add normal maps option for textures
 
 #[derive(Resource)]
 /// Main stored world chunks data
@@ -75,13 +38,13 @@ pub struct Controller {
     pub build: OrderSet<IVec3>,
 
     /// unload and despawn queue
-    pub unload: Vec<IVec3>,
+    pub _unload: Vec<IVec3>,
     pub despawn: Vec<Entity>,
 
     /// Compute tasks
-    load_tasks: HashMap<IVec3, Task<RawChunk>>,
-    build_tasks: HashMap<IVec3, Task<Option<Mesh>>>,
-    need_sort: bool
+    pub load_tasks: HashMap<IVec3, Task<RawChunk>>,
+    pub build_tasks: HashMap<IVec3, Task<Option<Mesh>>>,
+    pub need_sort: bool
 }
 
 impl Default for Controller {
@@ -112,11 +75,11 @@ impl Default for Controller {
             chunks: HashMap::with_capacity(1024),
             meshes: HashMap::with_capacity(1024),
             // Load-rebuild chunks 
-            //load: HashSet::with_capacity(1024),
-            //build: HashSet::with_capacity(1024),
+            //load: OrderSet::with_capacity(1024),
+            //build: OrderSet::with_capacity(1024),
             load, build,
             
-            unload: Vec::with_capacity(512),
+            _unload: Vec::with_capacity(512),
             despawn: Vec::with_capacity(512),
 
             load_tasks: HashMap::new(),
@@ -158,43 +121,49 @@ impl Controller {
     }
 }
 
-/// Main game plugin
-pub struct WorldPlugin;
-impl Plugin for WorldPlugin {
+/// Main engine logic
+pub struct EnginePlugin;
+impl Plugin for EnginePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Controller>()
-            .insert_resource(MainConfig::load_init())
-            .add_plugins((FpsPlugin, CameraPlugin, RenderingPlugin))
-            .add_systems(Startup, systems::setup)
-            .add_systems(Update, systems::keybind)
-            .add_systems(FixedUpdate, systems::skybox)
-            .add_systems(FixedPostUpdate, systems::update_selected)
-            .add_systems(PostUpdate, (systems::hot_reload, systems::begin).chain())
-            .add_systems(Last, (systems::unload, systems::join).chain());
+        app.init_state::<MainState>()
+        .add_plugins(bevy_egui::EguiPlugin)
+        .add_plugins((WorldPlugin, DebugPlugin, CameraPlugin, RenderingPlugin))
+        .add_systems(Update,
+            (systems::keybind).run_if(in_state(MainState::InGame))
+        ).add_systems(FixedUpdate,
+            (systems::skybox).run_if(in_state(MainState::InGame))
+        ).add_systems(FixedPostUpdate,
+            systems::update_selected.run_if(in_state(MainState::InGame))
+        ).add_systems(PostUpdate,
+            (systems::hot_reload, systems::begin).chain().run_if(in_state(MainState::InGame))
+        ).add_systems(Last,
+            (systems::unload, systems::join).chain().run_if(in_state(MainState::InGame))
+        );
     }
+}
 
-    fn cleanup(&self, app: &mut App) {
-        // Save config data
-        app.add_systems(PostStartup, |r: Res<MainConfig>| {
-            r.save();
-        });
+/// Default textures sampler
+fn default_sampler() -> ImageSamplerDescriptor {
+    ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
+        mag_filter: ImageFilterMode::Nearest,
+        min_filter: ImageFilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Linear,
+        ..default()
     }
 }
 
 pub fn main() {
     App::new()
-        .add_plugins(DefaultPlugins.set(
-            ImagePlugin {
-                default_sampler: ImageSamplerDescriptor {
-                    address_mode_u: ImageAddressMode::Repeat,
-                    address_mode_v: ImageAddressMode::Repeat,
-                    mag_filter: ImageFilterMode::Nearest,
-                    min_filter: ImageFilterMode::Linear,
-                    mipmap_filter: ImageFilterMode::Linear,
-                    ..default()
-                }
-            }
-        ))
-        .add_plugins(WorldPlugin)
+        .register_asset_source(
+            "worlds",
+            AssetSourceBuilder::platform_default("worlds", None)
+        )
+        .add_plugins(DefaultPlugins
+            .set(ImagePlugin { default_sampler: default_sampler() })
+        ).init_asset::<WorldData>()
+        .init_asset_loader::<WorldLoader>()
+        .add_plugins(EnginePlugin)
         .run();
 }
