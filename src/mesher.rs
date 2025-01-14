@@ -16,12 +16,12 @@ impl Direction {
     /// Get block position from grid and axis
     pub fn world_sample(&self, axis: i32, row: i32, column: i32) -> IVec3 {
         match self {
-            Self::Up => IVec3::new(row, axis, column),
+            Self::Up => IVec3::new(row, axis-1, column),
             Self::Down => IVec3::new(row, axis, column),
             Self::Left => IVec3::new(axis, column, row),
-            Self::Right => IVec3::new(axis, column, row),
+            Self::Right => IVec3::new(axis-1, column, row),
             Self::Forward => IVec3::new(row, column, axis),
-            Self::Back => IVec3::new(row, column, axis),
+            Self::Back => IVec3::new(row, column, axis-1),
         }
     } 
 
@@ -37,17 +37,6 @@ impl Direction {
         }
     }
 
-    pub fn negate_axis(&self) -> i32 {
-        match self {
-            Self::Up => 1,
-            Self::Down => 0,
-            Self::Left => 0,
-            Self::Right => 1,
-            Self::Forward => 0,
-            Self::Back => 1,
-        }
-    }
-
     pub fn reverse_order(&self) -> bool {
         match self {
             Self::Up => true,
@@ -56,6 +45,13 @@ impl Direction {
             Self::Right => true,
             Self::Forward => true,
             Self::Back => false,
+        }
+    }
+
+    pub fn negate_axis(&self) -> i32 {
+        match self {
+            Self::Up | Self::Right | Self::Back => 1,
+            _ => 0
         }
     }
     
@@ -166,8 +162,7 @@ impl ChunkMesh {
         let size = RawChunk::SIZE_I32;
 
         // Culled meshser
-        let n = dir.negate_axis();
-        for axis in n..(size+n) {
+        for axis in 0..size {
             for i in 0..size.pow(2) {
                 let row = i % size;
                 let column = i / size;

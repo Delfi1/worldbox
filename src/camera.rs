@@ -1,7 +1,8 @@
 use bevy::{
     math::*,
+    utils::*,
     prelude::*,
-    input::mouse::{MouseMotion, MouseWheel},
+    input::mouse::*,
 };
 use bevy::window::*;
 use std::f32::consts::PI;
@@ -47,7 +48,6 @@ fn camera_control(
     time: Res<Time>,
     kbd: Res<ButtonInput<KeyCode>>,
     mut evr_motion: EventReader<MouseMotion>,
-    mut evr_scroll: EventReader<MouseWheel>,
 ) {
     let window = primary_window.get_single().unwrap();
     let delta_time = time.delta().as_secs_f32();
@@ -57,18 +57,10 @@ fn camera_control(
         motion -= event.delta;
     }
 
-    let mut scroll = 0.0;
-    for event in evr_scroll.read() {
-        scroll += event.y
-    }
-
     if let Ok((mut camera, mut transform)) = cameras.get_single_mut() {
         let forward = transform.forward().normalize();
         let mut speed = camera.controller.speed;
         if kbd.pressed(KeyCode::ControlLeft) { speed *= 2.0 }
-        let scroll_speed = speed * scroll * 4.0;
-
-        transform.translation += forward * scroll_speed * delta_time;
 
         if kbd.pressed(KeyCode::KeyW) {
             transform.translation += forward * speed * delta_time;
@@ -107,5 +99,37 @@ fn camera_control(
             camera.controller.pitch,
             0.0
         );
+    }
+}
+
+#[derive(Component)]
+/// Procceds load and unload territory
+pub struct LoadArea {
+    area: HashSet<IVec3>,
+    current: HashSet<IVec3>,
+}
+
+impl LoadArea {
+    fn make_area(pos: IVec3, w: i32, h: i32) -> HashSet<IVec3> {
+        let mut result = HashSet::with_capacity((w*w*h) as usize);
+
+        for x in pos.x-w..pos.x+w {
+            for z in pos.z-w..pos.z+w {
+                for y in pos.y-w..pos.y+w {
+                    result.insert(IVec3::new(x, y, z));
+                }
+            }
+        }
+
+        result
+    }
+
+    pub fn new(width: u32, height: u32) -> Self {
+        let area = Self::make_area(IVec3::ZERO, width as i32, height as i32);
+
+        Self { 
+            area: area.clone(),
+            current: area
+        }
     }
 }

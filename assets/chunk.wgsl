@@ -55,13 +55,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let uvy = vertex.data >> 29u & x_bits(1u);
 
     let local_position = vec4<f32>(x, y, z, 1.0);
-    let world_position = get_world_from_local(vertex.instance_index) * local_position;
+    out.world_position = get_world_from_local(vertex.instance_index) * local_position;
     out.clip_position = mesh_position_local_to_clip(
         get_world_from_local(vertex.instance_index),
         local_position,
     );
 
-    out.world_position = world_position;
     let normal = normals[normal_index];
     out.world_normal = mesh_normal_local_to_world(normal, vertex.instance_index);
     out.uv = vec2(f32(uvx), f32(uvy));
@@ -89,13 +88,18 @@ fn fragment(input: VertexOutput) -> FragmentOutput {
     );
 
     pbr_input.material.metallic = 0.0;
-    pbr_input.material.perceptual_roughness = 1.0;
+    pbr_input.material.perceptual_roughness = 0.7;
     pbr_input.material.reflectance = 0.0;
 
     pbr_input.N = normalize(pbr_input.world_normal);
 
+#ifdef PREPASS_PIPELINE
+    let out = deferred_output(in, pbr_input);
+#else
     var out: FragmentOutput;
-
+    
     out.color = tone_mapping(apply_pbr_lighting(pbr_input), view.color_grading);
+#endif
+
     return out;
 }

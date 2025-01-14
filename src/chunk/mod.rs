@@ -59,7 +59,7 @@ impl RawChunk {
 
     /// Get all blocks above cursore by radius, absolute pos and vector u (camera forward)
     pub fn under_cursor(mut current: Vec3, u: Vec3, r: usize) -> Vec<Vec3> {        
-        let delta = 0.01;
+        let delta = 0.001;
         let mut stored = Vec::with_capacity(r);
         let mut blocks = Vec::with_capacity(r);
         while blocks.len() < r {

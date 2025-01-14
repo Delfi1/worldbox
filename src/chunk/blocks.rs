@@ -108,6 +108,14 @@ impl Model {
         }
     }
 
+    /// Can block be placed
+    pub fn is_placeable(&self) -> bool {
+        match self {
+            Self::Empty => false,
+            _ => true
+        }
+    }
+
     /// Get meshable block texture if exists
     pub fn texture(&self) -> Option<Handle<Image>> {
         match self {
@@ -163,8 +171,21 @@ impl BlocksHandler {
         }
     }
 
+    // Is block can be placed?
+    pub fn is_placeable(&self, block: u16) -> bool {
+        match self.0.get_index(block as usize) {
+            Some((_, t)) => t.model.is_placeable(),
+            _ => false
+        }
+    }
+
     /// Returns all blocks vec
     pub fn all(&self) -> Vec<u16> {
         self.0.keys().enumerate().map(|(i, _)| i as u16).collect()
+    }
+
+    pub fn all_placeable(&self) -> Vec<u16> {
+        self.0.iter().enumerate().filter(|(_, (_, b))| b.model.is_placeable())
+            .map(|(i, _)| i as u16).collect()
     }
 }

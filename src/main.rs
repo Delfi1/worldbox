@@ -133,7 +133,7 @@ impl Plugin for EnginePlugin {
         ).add_systems(FixedUpdate,
             (systems::skybox).run_if(in_state(MainState::InGame))
         ).add_systems(FixedPostUpdate,
-            systems::update_selected.run_if(in_state(MainState::InGame))
+            systems::update_view_blocks.run_if(in_state(MainState::InGame))
         ).add_systems(PostUpdate,
             (systems::hot_reload, systems::begin).chain().run_if(in_state(MainState::InGame))
         ).add_systems(Last,

@@ -1,5 +1,5 @@
 use bevy::{
-    core_pipeline::Skybox, 
+    core_pipeline::*, 
     prelude::*,
     render::{
         primitives::*,
@@ -30,16 +30,28 @@ pub fn load_world(
     mut world: ResMut<WorldRes>
 ) {
     commands.insert_resource(Controller::default());
-    commands.insert_resource(SelectedData::empty());
+    commands.insert_resource(ViewBlocks::empty());
+    commands.insert_resource(SelectedBlock(0));
+
     commands.insert_resource(AmbientLight {
         color: Color::Srgba(Srgba::rgb_u8(210, 220, 240)),
-        brightness: 1200.0,
+        brightness: 500.0,
         ..default()
     });
 
     commands.insert_resource(SkyBoxHandler(assets.load("skybox.png")));
+    let light = commands.spawn((
+        DirectionalLight {
+            illuminance: 1200.0,
+            ..default()
+        },
+        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -3.14/2.8, 0.0, 0.0))
+    )).id();
+    
+    world.entities.push(light);
+
     let camera = commands.spawn((
-        Camera3d::default(),    
+        Camera3d::default(),
         MainCamera::new(),
         Frustum::default(),
         Transform::from_xyz(16.0, 36.0, 16.0)
@@ -78,8 +90,8 @@ pub fn skybox(
 }
 
 /// Max thread tasks;
-pub const MAX_CHUNKS: usize = 4;
-pub const MAX_MESHES: usize = 2;
+pub const MAX_TASKS: usize = 4;
+
 // Begin tasks
 pub fn begin(
     mut controller: ResMut<Controller>,
@@ -100,17 +112,19 @@ pub fn begin(
     }
 
     // Chunks queue
-    let l = (MAX_CHUNKS - controller.load_tasks.len()).min(controller.load.len());
-    let mut to_remove = Vec::new();
+    let l = (MAX_TASKS - controller.load_tasks.len()).min(controller.load.len());
+    
     for i in 0..l {
         let Some(pos) = controller.load.get_index(i).cloned() else { continue };
-        controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(world.blocks.clone(), pos)));
-        to_remove.push(pos);
-    }
-    for pos in to_remove { controller.load.remove(&pos); }
+        // Remove pos
+        controller.load.remove(&pos);
 
+        // Begin task
+        controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(world.blocks.clone(), pos)));
+    }
+    
     // Meshes queue
-    let b = (MAX_MESHES - controller.build_tasks.len()).min(controller.build.len());
+    let b = (MAX_TASKS - controller.build_tasks.len()).min(controller.build.len());
     
     for i in 0..b {
         let Some(pos) = controller.build.get_index(i).cloned() else { continue };
@@ -209,13 +223,13 @@ pub fn hot_reload(
     }
 }
 
-struct SelectedBlock {
+struct ViewBlockData {
     chunk: IVec3,
     block: usize,
     data: u16
 }
 
-impl SelectedBlock {
+impl ViewBlockData {
     pub fn empty() -> Self {
         Self {
             chunk: IVec3::ZERO,
@@ -230,31 +244,31 @@ impl SelectedBlock {
 }
 
 #[derive(Resource)]
-pub struct SelectedData {
-    previous: SelectedBlock,
-    current: SelectedBlock
+pub struct ViewBlocks {
+    previous: ViewBlockData,
+    current: ViewBlockData
 }
 
-impl SelectedData {
+impl ViewBlocks {
     pub fn empty() -> Self {
-        Self { previous: SelectedBlock::empty(), current: SelectedBlock::empty() }
+        Self { previous: ViewBlockData::empty(), current: ViewBlockData::empty() }
     }
 
     pub fn reset(&mut self) {*self = Self::empty();}
 }
 
-pub fn update_selected(
+pub fn update_view_blocks(
     cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
     controller: Res<Controller>,
-    mut selected: ResMut<SelectedData>
+    mut view_blocks: ResMut<ViewBlocks>
 ) {
     let camera = cameras.single();
     let current = camera.translation();
     let u = camera.forward().normalize();
     let blocks = RawChunk::under_cursor(current, u, 32);
     
-    // Reset selected blocks
-    selected.reset();
+    // Reset view_blocks blocks
+    view_blocks.reset();
     for block in blocks {
         let chunk_pos = RawChunk::global(block);
         let index = RawChunk::block_index(RawChunk::relative(block));
@@ -263,22 +277,29 @@ pub fn update_selected(
             let guard = chunk.read();
             let data = guard.get()[index];
             if data == 0 {
-                selected.previous.set(chunk_pos, index, data);
+                view_blocks.previous.set(chunk_pos, index, data);
             } else {
-                selected.current.set(chunk_pos, index, data);
+                view_blocks.current.set(chunk_pos, index, data);
                 break;
             }
         }
     }
 }
 
+/// Current block.
+#[derive(Debug, Resource)]
+pub struct SelectedBlock(usize);
+
 pub fn keybind(
     mut controller: ResMut<Controller>,
     mut primary_window: Query<Mut<Window>, With<PrimaryWindow>>,
     kbd: Res<ButtonInput<KeyCode>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
+    mut evr_scroll: EventReader<bevy::input::mouse::MouseWheel>,
     cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
-    selected: Res<SelectedData>
+    view_blocks: Res<ViewBlocks>,
+    mut selected: ResMut<SelectedBlock>,
+    world: Res<WorldRes>
 ) {
     let camera = cameras.single();
     
@@ -300,39 +321,62 @@ pub fn keybind(
 
     // Destroy block
     if mouse_buttons.just_pressed(MouseButton::Left) {
-        if selected.current.data != 0 {
-            if let Some(chunk) = controller.chunks.get(&selected.current.chunk) {
+        if view_blocks.current.data != 0 {
+            if let Some(chunk) = controller.chunks.get(&view_blocks.current.chunk) {
                 let mut guard = chunk.write();
-                guard.get_mut()[selected.current.block] = 0;
+                guard.get_mut()[view_blocks.current.block] = 0;
             }
-            controller.rebuild(selected.current.chunk);
+            controller.rebuild(view_blocks.current.chunk);
         }
     }
 
     // Place block
     if mouse_buttons.just_pressed(MouseButton::Right) {
-        if selected.current.data != 0 {
-            if let Some(chunk) = controller.chunks.get(&selected.previous.chunk) {
+        if view_blocks.current.data != 0 {
+            let placeable = world.blocks.all_placeable();
+            if let Some(chunk) = controller.chunks.get(&view_blocks.previous.chunk) {
                 let mut guard = chunk.write();
-                guard.get_mut()[selected.previous.block] = 3;
+                guard.get_mut()[view_blocks.previous.block] = placeable[selected.0];
             }
-            controller.rebuild(selected.previous.chunk);
+            controller.rebuild(view_blocks.previous.chunk);
         }
     }
 
+    // Switch current block
+    for scroll in evr_scroll.read() {
+        let placeable = world.blocks.all_placeable();
+        println!("Selected: {:?}", placeable[selected.0]);
+
+        if scroll.y.is_sign_positive() {
+            if placeable[selected.0] == placeable[placeable.len()-1] {
+                selected.0 = 0;
+                continue;
+            }
+            selected.0 += 1;
+        } else {
+            if selected.0 == 0 {
+                selected.0 = placeable.len()-1;
+                continue;
+            }
+            selected.0 -= 1;
+        } 
+    }
+
     if kbd.just_pressed(KeyCode::KeyF) {
+        let placeable = world.blocks.all_placeable();
+        
         let current = camera.translation();
         let u = camera.forward().normalize();
-        let blocks = RawChunk::under_cursor(current, u, 320);    
+        let blocks = RawChunk::under_cursor(current, u, 320);
         
         for block in blocks {
             let chunk_pos = RawChunk::global(block);
             let index = RawChunk::block_index(RawChunk::relative(block));
             if let Some(chunk) = controller.chunks.get(&chunk_pos) {
                 let mut guard =  chunk.write();
-                guard.get_mut()[index] = 3;
+                guard.get_mut()[index] = placeable[selected.0];
             }
             controller.rebuild(chunk_pos);
-        }    
+        }
     }
 }
