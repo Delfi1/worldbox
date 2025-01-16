@@ -14,6 +14,7 @@ pub struct WorldRes {
     pub name: String,
     /// Current world data (for hot-reloading)
     pub handler: Handle<WorldData>,
+    pub skybox: Handle<Image>,
     /// All world's blocks
     pub blocks: BlocksHandler,
     pub main_material: Handle<ChunkMaterial>,
@@ -26,7 +27,6 @@ pub struct WorldRes {
 #[derive(Serialize, Deserialize)]
 pub struct WorldData {
     pub name: String,
-    pub skybox: AssetPath<'static>,
     pub blocks: Blocks
 }
 
@@ -65,7 +65,6 @@ impl Default for WorldData {
     fn default() -> Self {
         Self {
             name: "World".into(),
-            skybox: "skybox.png".into(),
             blocks: Blocks::default()
         }
     }

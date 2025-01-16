@@ -82,9 +82,12 @@ pub fn update(
                         
                         let blocks = BlocksHandler::new(&assets, data.blocks.clone());
                         let material = materials.add(ChunkMaterial::new(&blocks));
+                        let skybox = assets.load("skybox.png");
+
                         let res = WorldRes {
                             name: data.name.clone(),
                             handler: handle.clone(),
+                            skybox,
                             blocks,
                             main_material: material,
                             entities: Vec::new()

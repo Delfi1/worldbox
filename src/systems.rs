@@ -1,34 +1,18 @@
-use bevy::{
-    core_pipeline::*, 
-    prelude::*,
-    render::{
-        primitives::*,
-        render_resource::*
-    },
-    tasks::*, 
-    window::*
-};
 use super::*;
-
-#[derive(Resource)]
-pub struct SkyBoxHandler(pub Handle<Image>);
+use bevy::{
+    core_pipeline::*, prelude::*, render::{primitives::*, render_resource::*}, tasks::*, window::*
+};
 
 /// Setup application
-pub fn setup(
-    mut windows: Query<Mut<Window>, With<PrimaryWindow>>,
-) {
+pub fn setup(mut windows: Query<Mut<Window>, With<PrimaryWindow>>) {
     for mut window in windows.iter_mut() {
         window.title = "WorldBox".into();
-        window.present_mode = PresentMode::AutoVsync;        
+        window.present_mode = PresentMode::AutoVsync;
     }
 }
 
 // On world load system
-pub fn load_world(
-    assets: Res<AssetServer>,
-    mut commands: Commands,
-    mut world: ResMut<WorldRes>
-) {
+pub fn load_world(assets: Res<AssetServer>, mut commands: Commands, mut world: ResMut<WorldRes>) {
     commands.insert_resource(Controller::default());
     commands.insert_resource(ViewBlocks::empty());
     commands.insert_resource(SelectedBlock(0));
@@ -39,23 +23,27 @@ pub fn load_world(
         ..default()
     });
 
-    commands.insert_resource(SkyBoxHandler(assets.load("skybox.png")));
-    let light = commands.spawn((
-        DirectionalLight {
-            illuminance: 1200.0,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -3.14/2.8, 0.0, 0.0))
-    )).id();
-    
+    let light = commands
+        .spawn((
+            DirectionalLight {
+                illuminance: 1200.0,
+                ..default()
+            },
+            Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -3.14 / 2.8, 0.0, 0.0)),
+        ))
+        .id();
+
     world.entities.push(light);
 
-    let camera = commands.spawn((
-        Camera3d::default(),
-        MainCamera::new(),
-        Frustum::default(),
-        Transform::from_xyz(16.0, 36.0, 16.0)
-    )).id();
+    let camera = commands
+        .spawn((
+            Camera3d::default(),
+            MainCamera::new(),
+            LoadArea::new(16, 6),
+            Frustum::default(),
+            Transform::from_xyz(16.0, 36.0, 16.0),
+        ))
+        .id();
 
     world.entities.push(camera);
 }
@@ -63,29 +51,25 @@ pub fn load_world(
 pub fn skybox(
     mut commands: Commands,
     cameras: Query<Entity, With<Camera3d>>,
-    assets: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
-    handler: Res<SkyBoxHandler>
+    world: Res<WorldRes>
 ) {
-    if !assets.load_state(&handler.0).is_loaded() {return};
-    let image = images.get(&handler.0).unwrap();
-    if image.texture_descriptor.array_layer_count() != 1 {return;}
-    
-    let image = images.get_mut(&handler.0).unwrap();
-    image.reinterpret_stacked_2d_as_array(image.height() / image.width());
-    image.texture_view_descriptor = Some(TextureViewDescriptor {
-        dimension: Some(TextureViewDimension::Cube),
-        ..default()
-    });
+    let Some(image) = images.get(&world.skybox) else { return };
+    if image.texture_descriptor.array_layer_count() == 1 {
+        let image = images.get_mut(&world.skybox).unwrap();
+        image.reinterpret_stacked_2d_as_array(image.height() / image.width());
+        image.texture_view_descriptor = Some(TextureViewDescriptor {
+            dimension: Some(TextureViewDimension::Cube),
+            ..default()
+        });
+    }
 
     for camera in cameras.iter() {
-        commands.entity(camera).insert(
-            Skybox {
-                image: handler.0.clone(),
-                brightness: 800.0,
-                ..default()
-            }
-        );
+        commands.entity(camera).insert(Skybox {
+            image: world.skybox.clone(),
+            brightness: 800.0,
+            ..default()
+        });
     }
 }
 
@@ -96,52 +80,63 @@ pub const MAX_TASKS: usize = 4;
 pub fn begin(
     mut controller: ResMut<Controller>,
     cameras: Query<Ref<Transform>, With<Camera3d>>,
-    world: Res<WorldRes>
+    world: Res<WorldRes>,
 ) {
-    let task_pool = ComputeTaskPool::get();
+    let task_pool = AsyncComputeTaskPool::get();
 
     // Sort load-build queues
     if controller.need_sort {
         let current = RawChunk::global(cameras.single().translation);
-        controller.load.sort_by(|a, b| 
-            a.distance_squared(current).cmp(&b.distance_squared(current)));
-        controller.build.sort_by(|a, b| 
-            a.distance_squared(current).cmp(&b.distance_squared(current)));
+        controller.load.sort_by(|a, b| {
+            a.distance_squared(current)
+                .cmp(&b.distance_squared(current))
+        });
+        controller.build.sort_by(|a, b| {
+            a.distance_squared(current)
+                .cmp(&b.distance_squared(current))
+        });
 
         controller.need_sort = false;
     }
 
     // Chunks queue
     let l = (MAX_TASKS - controller.load_tasks.len()).min(controller.load.len());
-    
+
     for i in 0..l {
-        let Some(pos) = controller.load.get_index(i).cloned() else { continue };
+        let Some(pos) = controller.load.get_index(i).cloned() else {
+            continue;
+        };
         // Remove pos
         controller.load.remove(&pos);
 
         // Begin task
-        controller.load_tasks.insert(pos, task_pool.spawn(RawChunk::generate(world.blocks.clone(), pos)));
+        controller.load_tasks.insert(
+            pos,
+            task_pool.spawn(RawChunk::generate(world.blocks.clone(), pos)),
+        );
     }
-    
+
     // Meshes queue
     let b = (MAX_TASKS - controller.build_tasks.len()).min(controller.build.len());
-    
+
     for i in 0..b {
-        let Some(pos) = controller.build.get_index(i).cloned() else { continue };
+        let Some(pos) = controller.build.get_index(i).cloned() else {
+            continue;
+        };
         if let Some(refs) = controller.refs(pos) {
-            // Clear queue    
+            // Clear queue
             controller.build.remove(&pos);
 
             // Create mesh build task
-            controller.build_tasks.insert(pos, task_pool.spawn(ChunkMesh::build(world.blocks.clone(), refs)));
+            controller.build_tasks.insert(
+                pos,
+                task_pool.spawn(ChunkMesh::build(world.blocks.clone(), refs)),
+            );
         }
     }
 }
 
-pub fn unload(
-    mut controller: ResMut<Controller>,
-    mut commands: Commands
-) {
+pub fn unload(mut controller: ResMut<Controller>, mut commands: Commands) {
     for entity in controller.despawn.drain(..) {
         commands.entity(entity).despawn();
     }
@@ -160,7 +155,7 @@ pub fn join(
             controller.load_tasks.insert(pos, task);
             continue;
         }
-        
+
         let raw = block_on(task);
         controller.chunks.insert(pos, Chunk::new(raw));
     }
@@ -168,12 +163,12 @@ pub fn join(
     // join meshes
     let data: Vec<_> = controller.build_tasks.drain().collect();
     for (pos, task) in data {
-        if !task.is_finished() { 
+        if !task.is_finished() {
             controller.build_tasks.insert(pos, task);
             continue;
         }
-        
-        // Remove current mesh first chunks 
+
+        // Remove current mesh first chunks
         if let Some(old) = controller.meshes.remove(&pos) {
             controller.despawn.push(old);
         };
@@ -181,12 +176,17 @@ pub fn join(
         // Spawn new mesh
         if let Some(mesh) = block_on(task) {
             let handler = meshes.add(mesh);
-            let entity = commands.spawn((
-                Aabb::from_min_max(Vec3::splat(-RawChunk::SIZE_F32/2.0), Vec3::splat(RawChunk::SIZE_F32*1.5)),
-                Mesh3d(handler),
-                MeshMaterial3d(world.main_material.clone()),
-                Transform::from_translation(pos.as_vec3() * Vec3::splat(RawChunk::SIZE_F32))
-            )).id();
+            let entity = commands
+                .spawn((
+                    Aabb::from_min_max(
+                        Vec3::splat(-RawChunk::SIZE_F32 / 2.0),
+                        Vec3::splat(RawChunk::SIZE_F32 * 1.5),
+                    ),
+                    Mesh3d(handler),
+                    MeshMaterial3d(world.main_material.clone()),
+                    Transform::from_translation(pos.as_vec3() * Vec3::splat(RawChunk::SIZE_F32)),
+                ))
+                .id();
 
             controller.meshes.insert(pos, entity);
         }
@@ -211,6 +211,7 @@ pub fn hot_reload(
             // Recreate material
             let material = materials.add(ChunkMaterial::new(&blocks));
 
+            world.skybox = assets.load("skybox.png");
             world.blocks = blocks;
             world.main_material = material;
             controller.reload();
@@ -226,7 +227,7 @@ pub fn hot_reload(
 struct ViewBlockData {
     chunk: IVec3,
     block: usize,
-    data: u16
+    data: u16,
 }
 
 impl ViewBlockData {
@@ -234,7 +235,7 @@ impl ViewBlockData {
         Self {
             chunk: IVec3::ZERO,
             block: 0,
-            data: 0
+            data: 0,
         }
     }
 
@@ -246,27 +247,32 @@ impl ViewBlockData {
 #[derive(Resource)]
 pub struct ViewBlocks {
     previous: ViewBlockData,
-    current: ViewBlockData
+    current: ViewBlockData,
 }
 
 impl ViewBlocks {
     pub fn empty() -> Self {
-        Self { previous: ViewBlockData::empty(), current: ViewBlockData::empty() }
+        Self {
+            previous: ViewBlockData::empty(),
+            current: ViewBlockData::empty(),
+        }
     }
 
-    pub fn reset(&mut self) {*self = Self::empty();}
+    pub fn reset(&mut self) {
+        *self = Self::empty();
+    }
 }
 
 pub fn update_view_blocks(
     cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
     controller: Res<Controller>,
-    mut view_blocks: ResMut<ViewBlocks>
+    mut view_blocks: ResMut<ViewBlocks>,
 ) {
     let camera = cameras.single();
     let current = camera.translation();
     let u = camera.forward().normalize();
     let blocks = RawChunk::under_cursor(current, u, 32);
-    
+
     // Reset view_blocks blocks
     view_blocks.reset();
     for block in blocks {
@@ -288,7 +294,7 @@ pub fn update_view_blocks(
 
 /// Current block.
 #[derive(Debug, Resource)]
-pub struct SelectedBlock(usize);
+pub struct SelectedBlock(u16);
 
 pub fn keybind(
     mut controller: ResMut<Controller>,
@@ -299,10 +305,10 @@ pub fn keybind(
     cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
     view_blocks: Res<ViewBlocks>,
     mut selected: ResMut<SelectedBlock>,
-    world: Res<WorldRes>
+    world: Res<WorldRes>,
 ) {
     let camera = cameras.single();
-    
+
     if kbd.just_pressed(KeyCode::KeyR) {
         controller.reload();
     }
@@ -333,10 +339,9 @@ pub fn keybind(
     // Place block
     if mouse_buttons.just_pressed(MouseButton::Right) {
         if view_blocks.current.data != 0 {
-            let placeable = world.blocks.all_placeable();
             if let Some(chunk) = controller.chunks.get(&view_blocks.previous.chunk) {
                 let mut guard = chunk.write();
-                guard.get_mut()[view_blocks.previous.block] = placeable[selected.0];
+                guard.get_mut()[view_blocks.previous.block] = selected.0;
             }
             controller.rebuild(view_blocks.previous.chunk);
         }
@@ -344,37 +349,35 @@ pub fn keybind(
 
     // Switch current block
     for scroll in evr_scroll.read() {
-        let placeable = world.blocks.all_placeable();
-        println!("Selected: {:?}", placeable[selected.0]);
+        let blocks = world.blocks.all();
+        println!("Selected: {:?}", selected.0);
 
         if scroll.y.is_sign_positive() {
-            if placeable[selected.0] == placeable[placeable.len()-1] {
+            if selected.0 == blocks[blocks.len() - 1] {
                 selected.0 = 0;
                 continue;
             }
             selected.0 += 1;
         } else {
             if selected.0 == 0 {
-                selected.0 = placeable.len()-1;
+                selected.0 = blocks[blocks.len() - 1];
                 continue;
             }
             selected.0 -= 1;
-        } 
+        }
     }
 
     if kbd.just_pressed(KeyCode::KeyF) {
-        let placeable = world.blocks.all_placeable();
-        
         let current = camera.translation();
         let u = camera.forward().normalize();
         let blocks = RawChunk::under_cursor(current, u, 320);
-        
+
         for block in blocks {
             let chunk_pos = RawChunk::global(block);
             let index = RawChunk::block_index(RawChunk::relative(block));
             if let Some(chunk) = controller.chunks.get(&chunk_pos) {
-                let mut guard =  chunk.write();
-                guard.get_mut()[index] = placeable[selected.0];
+                let mut guard = chunk.write();
+                guard.get_mut()[index] = selected.0;
             }
             controller.rebuild(chunk_pos);
         }

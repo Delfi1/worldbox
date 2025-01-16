@@ -33,12 +33,13 @@ use world::*;
 pub struct Controller {
     pub chunks: HashMap<IVec3, chunk::Chunk>,
     pub meshes: HashMap<IVec3, Entity>,
+    
     /// load chunks queue; build meshes queue
     pub load: OrderSet<IVec3>,
     pub build: OrderSet<IVec3>,
 
     /// unload and despawn queue
-    pub _unload: Vec<IVec3>,
+    pub unload: Vec<IVec3>,
     pub despawn: Vec<Entity>,
 
     /// Compute tasks
@@ -49,37 +50,14 @@ pub struct Controller {
 
 impl Default for Controller {
     fn default() -> Self {
-        let n = 8;
-        let k = n-1;
-
-        // Test generate chunks area
-        let mut load: OrderSet<IVec3> = OrderSet::new();
-        for x in -n..n {
-            for y in -n..n {
-                for z in -n..n {
-                    load.insert(IVec3::new(x, y, z));
-                }
-            }
-        }
-
-        let mut build = OrderSet::new();
-        for x in -k..k {
-            for y in -k..k {
-                for z in -k..k {
-                    build.insert(IVec3::new(x, y, z));
-                }
-            }
-        }
-
         Self {
             chunks: HashMap::with_capacity(1024),
             meshes: HashMap::with_capacity(1024),
-            // Load-rebuild chunks 
-            //load: OrderSet::with_capacity(1024),
-            //build: OrderSet::with_capacity(1024),
-            load, build,
+
+            load: OrderSet::with_capacity(1024),
+            build: OrderSet::with_capacity(1024),
             
-            _unload: Vec::with_capacity(512),
+            unload: Vec::with_capacity(512),
             despawn: Vec::with_capacity(512),
 
             load_tasks: HashMap::new(),

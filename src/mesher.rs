@@ -143,11 +143,11 @@ impl Vertex {
         | (dir.to_u32()) << 18u32
         | (block) << 21u32 // Block id also texture id in binding array 
         | (uv.x) << 28u32  // UV may be only 0 or 1
-        | (uv.y) << 29u32; 
+        | (uv.y) << 29u32;
         
         Self(data)
     }
-}   
+}
 
 /// All mesh vertices
 #[derive(Debug, Default, Clone)]

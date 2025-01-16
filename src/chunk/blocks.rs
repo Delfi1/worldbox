@@ -183,9 +183,4 @@ impl BlocksHandler {
     pub fn all(&self) -> Vec<u16> {
         self.0.keys().enumerate().map(|(i, _)| i as u16).collect()
     }
-
-    pub fn all_placeable(&self) -> Vec<u16> {
-        self.0.iter().enumerate().filter(|(_, (_, b))| b.model.is_placeable())
-            .map(|(i, _)| i as u16).collect()
-    }
 }

@@ -1,7 +1,7 @@
 //! Main chunks objects data;
 
 mod blocks;
-use std::sync::*;
+use std::sync::{*, atomic::*};
 use bevy::prelude::*;
 use rand::seq::SliceRandom;
 pub use blocks::*;
@@ -93,19 +93,26 @@ impl RawChunk {
 
 // All voxels pocket data
 #[derive(Debug, Clone)]
-pub struct Chunk(Arc<RwLock<RawChunk>>);
+pub struct Chunk {
+    inner: Arc<RwLock<RawChunk>>,
+    modified: Arc<AtomicBool>
+}
 
 impl Chunk {
     pub fn new(raw: RawChunk) -> Self {
-        Self(Arc::new(RwLock::new(raw)))
+        Self {
+            inner: Arc::new(RwLock::new(raw)),
+            modified: Arc::new(AtomicBool::default())
+        }
     }
 
     pub fn read(&self) -> RwLockReadGuard<RawChunk> {
-        self.0.read().unwrap()
+        self.inner.read().unwrap()
     }
 
     pub fn write(&self) -> RwLockWriteGuard<RawChunk> {
-        self.0.write().unwrap()
+        self.modified.store(true, Ordering::Release);
+        self.inner.write().unwrap()
     }
 }
 
