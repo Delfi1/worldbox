@@ -4,7 +4,6 @@ set -eu
 # When run in a container, the ownership will be messed up, so mark the
 # checkout dir as safe regardless of our env
 git config --global --add safe.directory "$GITHUB_WORKSPACE"
-git update-index --chmod=+x .github/scripts/package.sh
 
 # Normally we'll only do this on tags, but add --always to fallback to the revision
 # if we're iterating or the like
