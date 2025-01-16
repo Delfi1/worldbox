@@ -26,8 +26,7 @@ features = [
     "multi_threaded",
     "file_watcher",
     "default_font",
-    "x11",
-    "wayland"
+    "x11"
 ]
 
 [dependencies]
