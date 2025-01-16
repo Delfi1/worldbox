@@ -137,6 +137,15 @@ pub fn begin(
 }
 
 pub fn unload(mut controller: ResMut<Controller>, mut commands: Commands) {
+    let data: Vec<_> = controller.unload.drain(..).collect();
+    for pos in data {
+        controller.chunks.remove(&pos);
+
+        if let Some(mesh) = controller.meshes.remove(&pos) {
+            controller.despawn.push(mesh);
+        };
+    }
+
     for entity in controller.despawn.drain(..) {
         commands.entity(entity).despawn();
     }
@@ -350,7 +359,6 @@ pub fn keybind(
     // Switch current block
     for scroll in evr_scroll.read() {
         let blocks = world.blocks.all();
-        println!("Selected: {:?}", selected.0);
 
         if scroll.y.is_sign_positive() {
             if selected.0 == blocks[blocks.len() - 1] {
@@ -365,6 +373,8 @@ pub fn keybind(
             }
             selected.0 -= 1;
         }
+
+        println!("Selected: {:?}", selected.0);
     }
 
     if kbd.just_pressed(KeyCode::KeyF) {

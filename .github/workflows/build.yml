@@ -34,7 +34,7 @@ jobs:
         env:
           NAME: cargo-about
           TARGET: ${{ matrix.target }}
-        run: .github/scripts/package.sh
+        run: .github/package.sh
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:
