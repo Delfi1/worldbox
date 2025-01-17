@@ -5,6 +5,7 @@ name: Build and release
 jobs:
   release:
     name: Release
+    permissions: write-all
 
     strategy:
       matrix:
@@ -38,11 +39,11 @@ jobs:
             chmod +x ./.github/scripts/package.sh
             ./.github/scripts/package.sh
       - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: softprops/action-gh-release@v1
         with:
           name: ${{ env.NAME }}
           tag_name: ${{ env.TAG_NAME }}
           draft: true
           files: "worldbox*"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
