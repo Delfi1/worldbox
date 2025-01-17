@@ -17,7 +17,8 @@ if [[ "$TARGET" =~ windows ]]; then
     tar -cf "$release_zip" -C "target/$TARGET/release/" "$bin"
     tar -uf "$release_zip" "./assets"
 else
-    zip -r "$release_zip" "target/$TARGET/release/$bin" "./assets"
+    zip -r "$release_zip" "./assets"
+    zip -ur -j "$release_zip" "target/$TARGET/release/$bin"
 fi
 
 export TAG_NAME = cargo pkgid | cut -d "#" -f2
