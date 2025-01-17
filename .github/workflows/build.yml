@@ -33,8 +33,10 @@ jobs:
         shell: bash
         env:
           NAME: cargo-about
-          TARGET: ${{ matrix.target }}
-        run: .github/scripts/package.sh
+          TARGET: ${{ matrix.target }} 
+        run: |
+            chmod +x ./.github/scripts/package.sh
+            ./.github/scripts/package.sh
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:
