@@ -32,7 +32,7 @@ jobs:
       - name: Package
         shell: bash
         env:
-          NAME: cargo-about
+          NAME: worldbox
           TARGET: ${{ matrix.target }} 
         run: |
             chmod +x ./.github/scripts/package.sh
@@ -41,6 +41,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          files: "cargo-about*"
+          files: "worldbox*"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
