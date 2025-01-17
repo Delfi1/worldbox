@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use rand::seq::SliceRandom;
 use serde::{Serialize, Deserialize};
 pub use blocks::*;
+use super::WorldRes;
 
 fn _random<T>(vec: &Vec<T>) -> &T {
     vec.choose(&mut rand::thread_rng()).unwrap()
@@ -16,13 +17,29 @@ fn _random<T>(vec: &Vec<T>) -> &T {
 pub struct StoredChunk(Vec<String>);
 
 impl StoredChunk {
-    pub fn new(blocks: BlocksHandler, chunk: &Chunk) -> Self {
+    pub fn new(blocks: BlocksHandler, chunk: Chunk) -> Self {
         let guard = chunk.inner.read().unwrap();
 
         Self(guard.get().iter().map(|i| blocks.get(*i)).collect())
     }
 
-    pub fn into(self, blocks: BlocksHandler) -> RawChunk {
+    pub fn store(&self, name: &String, pos: IVec3) {
+        let data = format!("./worlds/{}/chunks/{}_{}_{}.chunk", name, pos.x, pos.y, pos.z);
+        let path = std::path::PathBuf::from(data);
+
+        std::fs::write(path,  bincode::serialize(self).unwrap()).unwrap();
+    }
+
+    pub fn load(blocks: BlocksHandler, name: &String, pos: IVec3) -> Option<RawChunk> {
+        let data = format!("./worlds/{}/chunks/{}_{}_{}.chunk", name, pos.x, pos.y, pos.z);
+        let path = std::path::PathBuf::from(data);
+
+        let stored: Option<Self> = std::fs::read(path).ok().and_then(|bytes| bincode::deserialize(&bytes).ok());
+        
+        stored.and_then(|stored| Some(stored.parse(blocks)))
+    }
+
+    pub fn parse(self, blocks: BlocksHandler) -> RawChunk {
         let mut result = RawChunk::filled(0);
         for i in 0..RawChunk::SIZE_P3 {
             result.get_mut()[i] = blocks.block(self.0.get(i)
@@ -65,13 +82,19 @@ impl RawChunk {
 
         (x + y + z) as usize
     }
+    
+    // Try load chunk or generate them
+    pub async fn load(world: WorldRes, pos: IVec3) -> Self {
+        StoredChunk::load(world.blocks.clone(), &world.name, pos)
+            .unwrap_or(Self::generate(world.blocks, pos))
+    }
 
     /// Main generate function - WIP
-    pub async fn generate(_blocks: BlocksHandler, pos: IVec3) -> Self {
+    pub fn generate(blocks: BlocksHandler, pos: IVec3) -> Self {
         if pos.y == 0 {
             let mut chunk = Self::empty();
             for i in 0..Self::SIZE.pow(2) {
-                chunk.get_mut()[i] = _blocks.block("Grass");
+                chunk.get_mut()[i] = blocks.block("Grass");
             }
 
             chunk

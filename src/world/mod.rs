@@ -59,14 +59,6 @@ impl WorldData {
 
         result.into_iter().map(|p| AssetPath::from_static(p).with_source("worlds")).collect()
     }
-
-    pub fn store(&self, data: StoredChunk) {
-        todo!()
-    }
-
-    pub fn load() -> Option<StoredChunk> {
-        todo!()
-    }
 }
 
 impl Default for WorldData {

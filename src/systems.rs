@@ -112,7 +112,7 @@ pub fn begin(
         // Begin task
         controller.load_tasks.insert(
             pos,
-            task_pool.spawn(RawChunk::generate(world.blocks.clone(), pos)),
+            task_pool.spawn(RawChunk::load(world.clone(), pos)),
         );
     }
 
@@ -136,12 +136,14 @@ pub fn begin(
     }
 }
 
-pub fn unload(mut controller: ResMut<Controller>, mut commands: Commands) {
+pub fn unload(mut controller: ResMut<Controller>, world: Res<WorldRes>, mut commands: Commands) {
     let data: Vec<_> = controller.unload.drain(..).collect();
     for pos in data {
         if let Some(chunk) = controller.chunks.remove(&pos) {
             if chunk.is_modified() {
-                todo!();
+                let stored = StoredChunk::new(world.blocks.clone(), chunk);
+
+                stored.store(&world.name, pos);
             }
         }
 
