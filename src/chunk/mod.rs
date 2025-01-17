@@ -24,6 +24,7 @@ impl StoredChunk {
     }
 
     pub fn store(&self, name: &String, pos: IVec3) {
+        std::fs::create_dir_all(format!("./worlds/{}/chunks/", name)).unwrap();
         let data = format!("./worlds/{}/chunks/{}_{}_{}.chunk", name, pos.x, pos.y, pos.z);
         let path = std::path::PathBuf::from(data);
 

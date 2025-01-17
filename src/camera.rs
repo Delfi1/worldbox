@@ -147,7 +147,6 @@ fn calculate_area(
 ) {
     for (mut camera, mut loadarea) in cameras.iter_mut() {
         if camera.need_update {
-            println!("Load");
             let pos = camera.current_chunk;
             // Calculate new camera load chunks area
             let new: HashSet<_> = loadarea.area_pos(pos);
