@@ -5,10 +5,7 @@ set -eu
 # checkout dir as safe regardless of our env
 git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-# Normally we'll only do this on tags, but add --always to fallback to the revision
-# if we're iterating or the like
-tag=$(git describe --tags --abbrev=0 --always)
-release_name="$NAME-$tag-$TARGET"
+release_name="$NAME-$TARGET"
 release_tar="${release_name}.tar.gz"
 mkdir "$release_name"
 
