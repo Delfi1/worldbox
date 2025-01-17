@@ -40,6 +40,8 @@ jobs:
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:
+          name: ${{ env.NAME }}
+          tag_name: ${{ env.TAG_NAME }}
           draft: true
           files: "worldbox*"
         env:

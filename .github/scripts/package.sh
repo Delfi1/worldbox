@@ -24,6 +24,8 @@ tar czf "$release_tar" "$release_name"
 
 rm -r "$release_name"
 
+export TAG_NAME = cargo pkgid | cut -d "#" -f2
+
 # Windows environments in github actions don't have the gnu coreutils installed,
 # which includes the shasum exe, so we just use powershell instead
 if [[ "$TARGET" =~ windows ]]; then
