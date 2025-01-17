@@ -139,7 +139,11 @@ pub fn begin(
 pub fn unload(mut controller: ResMut<Controller>, mut commands: Commands) {
     let data: Vec<_> = controller.unload.drain(..).collect();
     for pos in data {
-        controller.chunks.remove(&pos);
+        if let Some(chunk) = controller.chunks.remove(&pos) {
+            if chunk.is_modified() {
+                todo!();
+            }
+        }
 
         if let Some(mesh) = controller.meshes.remove(&pos) {
             controller.despawn.push(mesh);

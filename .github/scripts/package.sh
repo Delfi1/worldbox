@@ -13,8 +13,11 @@ else
     bin="$NAME"
 fi
 
-zip -r "$release_zip" "target/$TARGET/release/$bin"
-zip -ur "$release_zip" "./assets"
+if [[ "$TARGET" =~ windows ]]; then
+    tar -cf "$release_zip" -C "target/$TARGET/release/$bin" "./assets"
+else
+    zip -r "$release_zip" "target/$TARGET/release/$bin" "./assets"
+fi
 
 export TAG_NAME = cargo pkgid | cut -d "#" -f2
 

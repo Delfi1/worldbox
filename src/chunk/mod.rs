@@ -4,10 +4,33 @@ mod blocks;
 use std::sync::{*, atomic::*};
 use bevy::prelude::*;
 use rand::seq::SliceRandom;
+use serde::{Serialize, Deserialize};
 pub use blocks::*;
 
 fn _random<T>(vec: &Vec<T>) -> &T {
     vec.choose(&mut rand::thread_rng()).unwrap()
+}
+
+#[derive(Serialize, Deserialize)]
+/// Chunk serialize-deserialize data
+pub struct StoredChunk(Vec<String>);
+
+impl StoredChunk {
+    pub fn new(blocks: BlocksHandler, chunk: &Chunk) -> Self {
+        let guard = chunk.inner.read().unwrap();
+
+        Self(guard.get().iter().map(|i| blocks.get(*i)).collect())
+    }
+
+    pub fn into(self, blocks: BlocksHandler) -> RawChunk {
+        let mut result = RawChunk::filled(0);
+        for i in 0..RawChunk::SIZE_P3 {
+            result.get_mut()[i] = blocks.block(self.0.get(i)
+                .map_or(Block::AIR, |v| v));
+        }
+
+        result
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -104,6 +127,10 @@ impl Chunk {
             inner: Arc::new(RwLock::new(raw)),
             modified: Arc::new(AtomicBool::default())
         }
+    }
+
+    pub fn is_modified(&self) -> bool {
+        self.modified.swap(false, Ordering::Relaxed)
     }
 
     pub fn read(&self) -> RwLockReadGuard<RawChunk> {

@@ -132,6 +132,8 @@ pub struct Block {
 }
 
 impl Block {
+    pub const AIR: &'static str = "Air";
+    
     pub fn new(assets: &AssetServer, t: BlockType) -> Self {
         Self {
             model: Model::load(assets, t.model),
@@ -150,6 +152,10 @@ impl BlocksHandler {
             .map(|(name, t)| (name, Block::new(assets, t)));
 
         Self(Arc::new(OrderMap::from_iter(data)))
+    }
+
+    pub fn get(&self, id: u16) -> String {
+        self.0.get_index(id as usize).and_then(|(name, _)| Some(name.clone())).expect("Incorrect id")
     }
 
     /// Return block id (0 if not exists) by name
