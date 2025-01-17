@@ -109,6 +109,8 @@ pub enum MainState {
     Loading,
     /// When world is loaded
     InGame,
+    /// Open game menu
+    GameMenu
 }
 
 /// Main game plugin
@@ -118,6 +120,7 @@ impl Plugin for WorldPlugin {
         app.insert_resource(menu::WorldName::default())
             .add_systems(OnEnter(MainState::InMenu), menu::setup)
             .add_systems(Startup, systems::setup)
+            .add_systems(Update, menu::game_menu.run_if(in_state(MainState::GameMenu)))
             .add_systems(Update, 
                 (menu::update, menu::reload).run_if(in_state(MainState::InMenu))
             ).add_systems(OnEnter(MainState::Loading), systems::load_world)

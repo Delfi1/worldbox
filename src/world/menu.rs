@@ -1,9 +1,9 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, window::*};
 use bevy_egui::{egui, *};
 use super::*;
 
 #[derive(Resource)]
-pub struct WorldsList {
+pub(super) struct WorldsList {
     pub worlds: Vec<Handle<WorldData>>,
     pub need_reload: bool
 }
@@ -151,4 +151,54 @@ pub fn process(
     }
 
     next_state.set(MainState::InGame);
+}
+
+// In game UI
+pub fn game_menu(
+    mut contexts: EguiContexts,
+    kbd: Res<ButtonInput<KeyCode>>,
+    mut primary_window: Query<Mut<Window>, With<PrimaryWindow>>,
+    mut next_state: ResMut<NextState<MainState>>,
+    
+    mut commands: Commands,
+    mut controller: ResMut<Controller>,
+    world: Res<WorldRes>,
+) {
+    if let Some(mut window) = primary_window.get_single_mut().ok() {
+        window.cursor_options.visible = true;
+        window.cursor_options.grab_mode = CursorGrabMode::None;
+    }
+
+    let modal = egui::Modal::new(egui::Id::new("Menu")).show(contexts.ctx_mut(), |ui| {
+        ui.set_width(400.0);
+        ui.set_height(460.0);
+        ui.heading("Menu");
+        
+        if ui.button("Save and exit").clicked() {
+            let meshes = controller.meshes.drain();
+            for (_, mesh) in meshes {
+                commands.entity(mesh).despawn();
+            }
+
+            // Save chunks
+            let data = controller.chunks.drain();
+            for (pos, chunk) in data {
+                if chunk.is_modified() {
+                    StoredChunk::new(world.blocks.clone(), chunk).store(&world.name, pos);
+                }
+            }
+
+            commands.remove_resource::<Controller>();
+            commands.remove_resource::<WorldRes>();
+
+            for entity in &world.entities {
+                commands.entity(*entity).despawn();
+            }
+            next_state.set(MainState::InMenu)
+        }
+    });
+    
+    if kbd.just_pressed(KeyCode::Escape) {
+        next_state.set(MainState::InGame);
+    }
 }

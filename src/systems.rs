@@ -313,15 +313,21 @@ pub struct SelectedBlock(u16);
 
 pub fn keybind(
     mut controller: ResMut<Controller>,
-    mut primary_window: Query<Mut<Window>, With<PrimaryWindow>>,
     kbd: Res<ButtonInput<KeyCode>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
+    mut primary_window: Query<Mut<Window>, With<PrimaryWindow>>,
     mut evr_scroll: EventReader<bevy::input::mouse::MouseWheel>,
     cameras: Query<Ref<GlobalTransform>, With<Camera3d>>,
     view_blocks: Res<ViewBlocks>,
+    mut next_state: ResMut<NextState<MainState>>,
     mut selected: ResMut<SelectedBlock>,
     world: Res<WorldRes>,
 ) {
+    if let Some(mut window) = primary_window.get_single_mut().ok() {
+        window.cursor_options.visible = false;
+        window.cursor_options.grab_mode = CursorGrabMode::Locked;
+    }
+
     let camera = cameras.single();
 
     if kbd.just_pressed(KeyCode::KeyR) {
@@ -329,15 +335,7 @@ pub fn keybind(
     }
 
     if kbd.just_pressed(KeyCode::Escape) {
-        if let Some(mut window) = primary_window.get_single_mut().ok() {
-            if window.cursor_options.visible {
-                window.cursor_options.visible = false;
-                window.cursor_options.grab_mode = CursorGrabMode::Locked;
-            } else {
-                window.cursor_options.visible = true;
-                window.cursor_options.grab_mode = CursorGrabMode::None;
-            }
-        }
+        next_state.set(MainState::GameMenu);
     }
 
     // Destroy block

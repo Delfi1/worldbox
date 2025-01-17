@@ -101,14 +101,12 @@ fn camera_control(
             transform.translation.y += speed * delta_time;
         }
 
-        if window.cursor_options.grab_mode != CursorGrabMode::None {
-            // Rotate camera
-            let contr = &mut camera.controller;
-            contr.yaw += motion.x.to_radians() * contr.sensitivity;
-            contr.pitch += motion.y.to_radians() * contr.sensitivity;
-            contr.pitch = contr.pitch.clamp(-PI/2.1, PI/2.1);
-        }
-
+        // Rotate camera
+        let contr = &mut camera.controller;
+        contr.yaw += motion.x.to_radians() * contr.sensitivity;
+        contr.pitch += motion.y.to_radians() * contr.sensitivity;
+        contr.pitch = contr.pitch.clamp(-PI/2.1, PI/2.1);
+        
         transform.rotation = Quat::from_euler(
             EulerRot::YXZ,
             camera.controller.yaw,
