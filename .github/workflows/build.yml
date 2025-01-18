@@ -35,6 +35,7 @@ jobs:
         env:
           NAME: worldbox
           TARGET: ${{ matrix.target }} 
+          OS: ${{ matrix.os }} 
         run: |
             chmod +x ./.github/scripts/package.sh
             ./.github/scripts/package.sh

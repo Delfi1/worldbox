@@ -36,6 +36,10 @@ impl MainCamera {
             need_update: true,
         }
     }
+
+    pub fn update(&mut self) {
+        self.need_update = true;
+    }
 }
 
 pub struct CameraPlugin;
@@ -61,7 +65,6 @@ fn camera_control(
     kbd: Res<ButtonInput<KeyCode>>,
     mut evr_motion: EventReader<MouseMotion>,
 ) {
-    let window = primary_window.get_single().unwrap();
     let delta_time = time.delta().as_secs_f32();
 
     let mut motion = Vec2::ZERO;
@@ -127,6 +130,7 @@ fn on_move(
         if camera.need_update {
             camera.current_chunk = global;
             load.current = load.area_pos(global);
+            
             controller.load.extend(load.current.iter().copied());
             controller.build.extend(load.current.iter().copied());
         }
@@ -195,5 +199,9 @@ impl LoadArea {
             area: area.clone(),
             current: area
         }
+    }
+
+    pub fn update(&mut self, new_w: u32, new_h: u32) {
+        *self = Self::new(new_w, new_h);
     }
 }

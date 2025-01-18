@@ -83,6 +83,15 @@ impl Controller {
         self.sort();
     }
 
+    /// Unload all chunks & meshes
+    pub fn unload(&mut self) {
+        self.load_tasks.drain();
+        self.build_tasks.drain();
+        self.load.clear();
+        self.build.clear();
+        self.unload.extend(self.chunks.keys().copied());
+    }
+
     // Rebuild chunk meshes
     pub fn rebuild(&mut self, chunk: IVec3) {
         self.build.extend(ChunksRefs::offsets(chunk));

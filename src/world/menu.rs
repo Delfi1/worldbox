@@ -24,6 +24,7 @@ pub fn setup(
 ) {
     let list = WorldData::load_list();
 
+    commands.insert_resource(RenderDistance::default());
     commands.insert_resource(
         WorldsList {
             worlds: list.into_iter().map(|p| assets.load(p)).collect(),
@@ -153,6 +154,18 @@ pub fn process(
     next_state.set(MainState::InGame);
 }
 
+#[derive(Resource)]
+pub struct RenderDistance {
+    pub width: u32,
+    pub height: u32
+}
+
+impl Default for RenderDistance {
+    fn default() -> Self {
+        Self { width: 16, height: 6 }
+    }
+}
+
 // In game UI
 pub fn game_menu(
     mut contexts: EguiContexts,
@@ -162,6 +175,8 @@ pub fn game_menu(
     
     mut commands: Commands,
     mut controller: ResMut<Controller>,
+    mut render_distance: ResMut<RenderDistance>,
+    mut cameras: Query<(Mut<MainCamera>, Mut<LoadArea>)>,
     world: Res<WorldRes>,
 ) {
     if let Some(mut window) = primary_window.get_single_mut().ok() {
@@ -169,11 +184,31 @@ pub fn game_menu(
         window.cursor_options.grab_mode = CursorGrabMode::None;
     }
 
-    let modal = egui::Modal::new(egui::Id::new("Menu")).show(contexts.ctx_mut(), |ui| {
+    // Main modal menu
+    let _modal = egui::Modal::new(egui::Id::new("Menu")).show(contexts.ctx_mut(), |ui| {
         ui.set_width(400.0);
         ui.set_height(460.0);
         ui.heading("Menu");
-        
+
+        // Update render distance logic
+        ui.label("Render distance: ");
+
+        let mut need_update = false;
+        let render_w = egui::Slider::new(&mut render_distance.width, 2..=64).text("Width");
+        if ui.add(render_w).changed() { need_update = true };
+        let render_h = egui::Slider::new(&mut render_distance.height, 2..=24).text("Height");
+        if ui.add(render_h).changed() { need_update = true }
+
+        if need_update {
+            for (mut camera, mut load_area) in cameras.iter_mut() {
+                load_area.update(render_distance.width, render_distance.height);
+                camera.update();
+                controller.unload();
+            }
+        }
+
+        // World save and exit button
+        ui.add_space(30.0);
         if ui.button("Save and exit").clicked() {
             let meshes = controller.meshes.drain();
             for (_, mesh) in meshes {
