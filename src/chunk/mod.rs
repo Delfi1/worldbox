@@ -17,7 +17,7 @@ fn _random<T>(vec: &Vec<T>) -> &T {
 pub struct StoredChunk(Vec<String>);
 
 impl StoredChunk {
-    pub fn new(blocks: BlocksHandler, chunk: Chunk) -> Self {
+    pub fn new(blocks: BlocksHandler, chunk: &Chunk) -> Self {
         let guard = chunk.inner.read().unwrap();
 
         Self(guard.get().iter().map(|i| blocks.get(*i)).collect())

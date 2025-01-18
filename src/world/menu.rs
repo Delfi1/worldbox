@@ -184,7 +184,8 @@ pub fn game_menu(
             let data = controller.chunks.drain();
             for (pos, chunk) in data {
                 if chunk.is_modified() {
-                    StoredChunk::new(world.blocks.clone(), chunk).store(&world.name, pos);
+                    StoredChunk::new(world.blocks.clone(), &chunk)
+                        .store(&world.name, pos);
                 }
             }
 

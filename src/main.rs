@@ -113,7 +113,7 @@ impl Plugin for EnginePlugin {
         ).add_systems(FixedPostUpdate,
             systems::update_view_blocks.run_if(in_state(MainState::InGame))
         ).add_systems(PostUpdate,
-            (systems::hot_reload, systems::begin).chain().run_if(in_state(MainState::InGame))
+            (systems::hot_reload, systems::begin, systems::autosave).chain().run_if(in_state(MainState::InGame))
         ).add_systems(Last,
             (systems::unload, systems::join).chain().run_if(in_state(MainState::InGame))
         );

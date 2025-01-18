@@ -12,10 +12,11 @@ pub fn setup(mut windows: Query<Mut<Window>, With<PrimaryWindow>>) {
 }
 
 // On world load system
-pub fn load_world(assets: Res<AssetServer>, mut commands: Commands, mut world: ResMut<WorldRes>) {
+pub fn load_world(mut commands: Commands, mut world: ResMut<WorldRes>) {
     commands.insert_resource(Controller::default());
     commands.insert_resource(ViewBlocks::empty());
     commands.insert_resource(SelectedBlock(0));
+    commands.insert_resource(SaveWorldTimer(Timer::from_seconds(300.0, TimerMode::Repeating)));
 
     commands.insert_resource(AmbientLight {
         color: Color::Srgba(Srgba::rgb_u8(210, 220, 240)),
@@ -141,9 +142,8 @@ pub fn unload(mut controller: ResMut<Controller>, world: Res<WorldRes>, mut comm
     for pos in data {
         if let Some(chunk) = controller.chunks.remove(&pos) {
             if chunk.is_modified() {
-                let stored = StoredChunk::new(world.blocks.clone(), chunk);
-
-                stored.store(&world.name, pos);
+                StoredChunk::new(world.blocks.clone(), &chunk)
+                    .store(&world.name, pos);
             }
         }
 
@@ -394,6 +394,26 @@ pub fn keybind(
                 guard.get_mut()[index] = selected.0;
             }
             controller.rebuild(chunk_pos);
+        }
+    }
+}
+
+#[derive(Resource)]
+pub struct SaveWorldTimer(Timer);
+
+pub fn autosave(
+    time: Res<Time>,
+    world: Res<WorldRes>,
+    controller: Res<Controller>,
+    mut timer: ResMut<SaveWorldTimer>
+) {
+    timer.0.tick(time.delta());
+    if timer.0.finished() {
+        println!("Autosave...");
+        for (pos, chunk) in controller.chunks.iter() {
+            if chunk.is_modified() {
+                StoredChunk::new(world.blocks.clone(), chunk).store(&world.name, *pos);
+            }
         }
     }
 }
