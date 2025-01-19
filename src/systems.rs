@@ -12,7 +12,7 @@ pub fn setup(mut windows: Query<Mut<Window>, With<PrimaryWindow>>) {
 }
 
 // On world load system
-pub fn load_world(mut commands: Commands, mut world: ResMut<WorldRes>) {
+pub fn load_world(assets: Res<AssetServer>, mut commands: Commands, mut world: ResMut<WorldRes>) {
     commands.insert_resource(Controller::default());
     commands.insert_resource(ViewBlocks::empty());
     commands.insert_resource(SelectedBlock(0));
@@ -23,6 +23,19 @@ pub fn load_world(mut commands: Commands, mut world: ResMut<WorldRes>) {
         brightness: 500.0,
         ..default()
     });
+
+    // Create centralized node with image node of cross image
+    let cross = commands.spawn(
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            position_type: PositionType::Absolute,
+            ..default()
+        }
+    ).with_child(ImageNode::new(assets.load("cross.png"))).id();
+    world.entities.push(cross);
 
     let light = commands
         .spawn((
