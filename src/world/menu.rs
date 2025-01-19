@@ -194,9 +194,9 @@ pub fn game_menu(
         ui.label("Render distance: ");
 
         let mut need_update = false;
-        let render_w = egui::Slider::new(&mut render_distance.width, 2..=64).text("Width");
+        let render_w = egui::Slider::new(&mut render_distance.width, 2..=32).text("Width");
         if ui.add(render_w).changed() { need_update = true };
-        let render_h = egui::Slider::new(&mut render_distance.height, 2..=24).text("Height");
+        let render_h = egui::Slider::new(&mut render_distance.height, 2..=16).text("Height");
         if ui.add(render_h).changed() { need_update = true }
 
         if need_update {

@@ -12,6 +12,7 @@ fn _random<T>(vec: &Vec<T>) -> &T {
     vec.choose(&mut rand::thread_rng()).unwrap()
 }
 
+// Todo: merge "stored chunk" and default "raw chunk" into one type.
 #[derive(Serialize, Deserialize)]
 /// Chunk serialize-deserialize data
 pub struct StoredChunk(Vec<String>);

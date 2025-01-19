@@ -299,7 +299,7 @@ pub fn update_view_blocks(
     let camera = cameras.single();
     let current = camera.translation();
     let u = camera.forward().normalize();
-    let blocks = RawChunk::under_cursor(current, u, 32);
+    let blocks = RawChunk::under_cursor(current, u, 128);
 
     // Reset view_blocks blocks
     view_blocks.reset();
@@ -392,6 +392,10 @@ pub fn keybind(
         }
 
         println!("Selected: {:?}", selected.0);
+    }
+
+    if mouse_buttons.just_pressed(MouseButton::Middle) {
+        selected.0 = view_blocks.current.data;
     }
 
     if kbd.just_pressed(KeyCode::KeyF) {
