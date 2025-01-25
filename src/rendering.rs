@@ -25,8 +25,11 @@ pub struct ChunkMaterial {
     textures: Vec<Option<Handle<Image>>>,
 }
 
+#[derive(Default, Resource)]
+pub struct GlobalMaterial(pub Option<Handle<ChunkMaterial>>);
+
 /// Set max textures bind group lenght
-pub const MAX_TEXTURES: usize = 256;
+pub const MAX_TEXTURES: usize = u16::MAX as usize;
 
 impl AsBindGroup for ChunkMaterial {
     type Data = ();
@@ -110,7 +113,7 @@ impl AsBindGroup for ChunkMaterial {
 /// Default chunk mesh
 impl ChunkMaterial {
     pub fn new(handler: &BlocksHandler) -> Self {
-        Self { textures: handler.textures() }
+        Self { textures: handler.meshable_textures() }
     }
 }
 
@@ -145,6 +148,7 @@ impl Material for ChunkMaterial {
 pub struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<ChunkMaterial>::default());
+        app.add_plugins(MaterialPlugin::<ChunkMaterial>::default())
+            .init_resource::<GlobalMaterial>();
     }
 }   

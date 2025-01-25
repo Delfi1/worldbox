@@ -1,6 +1,5 @@
 use bevy::{
     math::*,
-    utils::*,
     prelude::*,
     input::mouse::*,
 };
@@ -36,10 +35,6 @@ impl MainCamera {
             need_update: true,
         }
     }
-
-    pub fn update(&mut self) {
-        self.need_update = true;
-    }
 }
 
 pub struct CameraPlugin;
@@ -50,17 +45,20 @@ impl Plugin for CameraPlugin {
             camera_control
                 .run_if(any_with_component::<PrimaryWindow>)
                 .run_if(any_with_component::<MainCamera>)
-                .run_if(in_state(MainState::InGame))
-        ).add_systems(PostUpdate, (
-            on_move,
-            calculate_area
-        ).chain().run_if(in_state(MainState::InGame)));
+                .run_if(in_state(AppState::Game))
+        ).add_systems
+        (PostUpdate,
+             (
+                on_move,
+                calculate_area
+            ).chain()
+            .run_if(in_state(AppState::Game))
+        );
     }
 }
 
 fn camera_control(
     mut cameras: Query<(Mut<MainCamera>, Mut<Transform>)>,
-    primary_window: Query<Ref<Window>, With<PrimaryWindow>>,
     time: Res<Time>,
     kbd: Res<ButtonInput<KeyCode>>,
     mut evr_motion: EventReader<MouseMotion>,
@@ -108,7 +106,7 @@ fn camera_control(
         let contr = &mut camera.controller;
         contr.yaw += motion.x.to_radians() * contr.sensitivity;
         contr.pitch += motion.y.to_radians() * contr.sensitivity;
-        contr.pitch = contr.pitch.clamp(-PI/2.1, PI/2.1);
+        contr.pitch = contr.pitch.clamp(-PI/2.02, PI/2.02);
         
         transform.rotation = Quat::from_euler(
             EulerRot::YXZ,
@@ -129,10 +127,11 @@ fn on_move(
         // If need_update was overrided
         if camera.need_update {
             camera.current_chunk = global;
-            load.current = load.area_pos(global);
+            load.current_chunks = load.area_chunks_pos(global);
+            load.current_meshes = load.area_meshes_pos(global);
             
-            controller.load.extend(load.current.iter().copied());
-            controller.build.extend(load.current.iter().copied());
+            controller.load.extend(load.current_chunks.iter().copied());
+            controller.build.extend(load.current_meshes.iter().copied());
         }
 
         // If current chunk is changed
@@ -147,35 +146,42 @@ fn calculate_area(
     mut controller: ResMut<Controller>,
     mut cameras: Query<(Mut<MainCamera>, Mut<LoadArea>)>
 ) {
-    for (mut camera, mut loadarea) in cameras.iter_mut() {
-        if camera.need_update {
-            let pos = camera.current_chunk;
-            // Calculate new camera load chunks area
-            let new: HashSet<_> = loadarea.area_pos(pos);
+    let (mut camera, mut loadarea) = cameras.get_single_mut().unwrap();
+    
+    if camera.need_update {
+        let pos = camera.current_chunk;
+        let new_chunks = loadarea.area_chunks_pos(pos);
+        let new_meshes = loadarea.area_meshes_pos(pos);
 
-            let load_data = new.difference(&loadarea.current).copied();
-            controller.load.extend(load_data.clone());
-            controller.build.extend(load_data);
-            controller.sort();
+        let load = new_chunks.difference(&loadarea.current_chunks);
+        let build = new_meshes.difference(&loadarea.current_meshes);
+        let unload = loadarea.current_chunks.difference(&new_chunks);
 
-            controller.unload.extend(loadarea.current.difference(&new).copied());
-            loadarea.current = new;
-            camera.need_update = false;
-        }
+        controller.load.extend(load);
+        controller.build.extend(build);
+        controller.unload.extend(unload);
+        controller.sort();
+
+        loadarea.current_chunks = new_chunks;
+        loadarea.current_meshes = new_meshes;
+
+        camera.need_update = false;
     }
 }
 
 
-#[derive(Component)]
+#[derive(Clone, Component)]
 /// Procceds load and unload territory
 pub struct LoadArea {
-    area: HashSet<IVec3>,
-    current: HashSet<IVec3>,
+    chunks_area: OrderSet<IVec3>,
+    meshes_area: OrderSet<IVec3>,
+    current_chunks: OrderSet<IVec3>,
+    current_meshes: OrderSet<IVec3>
 }
 
 impl LoadArea {
-    fn make_area(pos: IVec3, w: i32, h: i32) -> HashSet<IVec3> {
-        let mut result = HashSet::with_capacity((w*w*h) as usize);
+    fn make_area(pos: IVec3, w: i32, h: i32) -> OrderSet<IVec3> {
+        let mut result = OrderSet::with_capacity((w*w*h) as usize);
 
         for x in pos.x-w..pos.x+w {
             for z in pos.z-w..pos.z+w {
@@ -188,20 +194,27 @@ impl LoadArea {
         result
     }
 
-    pub fn area_pos(&self, pos: IVec3) -> HashSet<IVec3> {
-        self.area.iter().copied().into_iter().map(|p| p +pos).collect()
+    pub fn area_chunks_pos(&self, pos: IVec3) -> OrderSet<IVec3> {
+        self.chunks_area.iter().copied().into_iter().map(|p| p + pos).collect()
+    }
+
+    pub fn area_meshes_pos(&self, pos: IVec3) -> OrderSet<IVec3> {
+        self.meshes_area.iter().copied().into_iter().map(|p| p + pos).collect()
     }
 
     pub fn new(width: u32, height: u32) -> Self {
-        let area = Self::make_area(IVec3::ZERO, width as i32, height as i32);
+        let chunk_area = Self::make_area(IVec3::ZERO, (width+1) as i32, (height+1) as i32);
+        let meshes_area = Self::make_area(IVec3::ZERO, width as i32, height as i32);
 
-        Self { 
-            area: area.clone(),
-            current: area
+        Self {
+            chunks_area: chunk_area,
+            meshes_area: meshes_area,
+            current_chunks: OrderSet::new(),
+            current_meshes: OrderSet::new()
         }
     }
 
-    pub fn update(&mut self, new_w: u32, new_h: u32) {
+    pub fn _update(&mut self, new_w: u32, new_h: u32) {
         *self = Self::new(new_w, new_h);
     }
 }

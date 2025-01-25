@@ -26,13 +26,14 @@ impl Default for CollisionBox {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-// todo models
+// Models can be two types:
+// Meshable or non-Meshable.
 pub enum ModelType {
-    /// Empty model
+    /// Block without textures
     Empty,
     /// Standart block type
     Meshable(AssetPath<'static>),
-    Crossed(AssetPath<'static>),
+    // Custom textures, non-meshable block type
     Custom(AssetPath<'static>)
 }
 
@@ -44,6 +45,9 @@ impl ModelType {
         }
     }
 }
+
+// todo: blocks "schemes" for worldgen
+// pub struct Scheme 
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BlockType {
@@ -86,17 +90,16 @@ pub struct CustomModel {
 pub enum Model {
     Empty,
     Meshable(Handle<Image>),
-    Crossed(Handle<Image>),
     Custom(Handle<CustomModel>)
 }
 
 impl Model {
-    pub fn load(assets: &AssetServer, t: ModelType) -> Self {
+    // Load block model asset
+    pub fn load(loader: &mut LoadContext<'_>, t: ModelType) -> Self {
         match t {
             ModelType::Empty => Self::Empty,
-            ModelType::Meshable(path) => Self::Meshable(assets.load(path)),
-            ModelType::Crossed(path) => Self::Crossed(assets.load(path)),
-            ModelType::Custom(path) => Self::Custom(assets.load(path))
+            ModelType::Meshable(path) => Self::Meshable(loader.load(path)),
+            ModelType::Custom(path) => Self::Custom(loader.load(path))
         }
     }
 
@@ -108,16 +111,8 @@ impl Model {
         }
     }
 
-    /// Can block be placed
-    pub fn is_placeable(&self) -> bool {
-        match self {
-            Self::Empty => false,
-            _ => true
-        }
-    }
-
     /// Get meshable block texture if exists
-    pub fn texture(&self) -> Option<Handle<Image>> {
+    pub fn meshable_texture(&self) -> Option<Handle<Image>> {
         match self {
             Self::Meshable(h) => Some(h.clone()),
             _ => None
@@ -132,11 +127,9 @@ pub struct Block {
 }
 
 impl Block {
-    pub const AIR: &'static str = "Air";
-    
-    pub fn new(assets: &AssetServer, t: BlockType) -> Self {
+    pub fn new(loader: &mut LoadContext<'_>, t: BlockType) -> Self {
         Self {
-            model: Model::load(assets, t.model),
+            model: Model::load(loader, t.model),
             collision: t.collision
         }
     }
@@ -147,46 +140,41 @@ impl Block {
 pub struct BlocksHandler(Arc<OrderMap<String, Block>>);
 
 impl BlocksHandler {
-    pub fn new(assets: &AssetServer, blocks: Blocks) -> Self {
+    pub fn new(loader: &mut LoadContext<'_>, blocks: Blocks) -> Self {
         let data = blocks.0.into_iter()
-            .map(|(name, t)| (name, Block::new(assets, t)));
+            .map(|(name, t)| (name, Block::new(loader, t)));
 
         Self(Arc::new(OrderMap::from_iter(data)))
     }
 
-    pub fn get(&self, id: u16) -> String {
-        self.0.get_index(id as usize).and_then(|(name, _)| Some(name.clone())).expect("Incorrect id")
+    pub fn is_meshable(&self, index: u16) -> bool {
+        match self.0.get_index(index as usize) {
+            Some((_, b)) => b.model.is_meshable(),
+            None => false
+        }
     }
 
-    /// Return block id (0 if not exists) by name
-    pub fn block(&self, name: impl Into<String>) -> u16 {
-        self.0.get_index_of(&name.into())
-        .and_then(|i| Some(i as u16)).unwrap_or(0)
+    /// Return block by name
+    pub fn block(&self, name: impl Into<String>) -> Option<&Block> {
+        self.0.get(&name.into())
+    }
+
+    /// Return block id by name
+    pub fn get(&self, name: impl Into<String>) -> u16 {
+        self.0.get_index_of(&name.into()).unwrap() as u16
     }
 
     /// Get all meshable blocks textures
-    pub fn textures(&self) -> Vec<Option<Handle<Image>>> {
-        self.0.iter().map(|(_, b)| b.model.texture()).collect()
-    }
-
-    /// Is texture drawable with default way?
-    pub fn is_meshable(&self, block: u16) -> bool {
-        match self.0.get_index(block as usize) {
-            Some((_, t)) => t.model.is_meshable(),
-            _ => false
-        }
-    }
-
-    // Is block can be placed?
-    pub fn is_placeable(&self, block: u16) -> bool {
-        match self.0.get_index(block as usize) {
-            Some((_, t)) => t.model.is_placeable(),
-            _ => false
-        }
+    pub fn meshable_textures(&self) -> Vec<Option<Handle<Image>>> {
+        self.0.iter().map(|(_, b)| b.model.meshable_texture()).collect()
     }
 
     /// Returns all blocks vec
-    pub fn all(&self) -> Vec<u16> {
-        self.0.keys().enumerate().map(|(i, _)| i as u16).collect()
+    pub fn all(&self) -> Vec<&Block> {
+        self.0.values().collect()
+    }
+
+    pub fn ids(&self) -> Vec<u16> {
+        self.0.iter().enumerate().map(|(i, _)| i as u16).collect()
     }
 }

@@ -1,9 +1,8 @@
 //! Just simple debug info
-
-use super::MainState;
 use bevy::diagnostic::DiagnosticsStore;
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
+use super::*;
 
 #[derive(Component)]
 struct DebugText;
@@ -68,9 +67,16 @@ pub struct DebugPlugin;
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(FrameTimeDiagnosticsPlugin)
-            .add_systems(OnEnter(MainState::InGame), setup)
-            .add_systems(FixedUpdate,
-                (update, hide).chain().run_if(in_state(MainState::InGame))
-            ).add_systems(OnExit(MainState::InGame), destroy);
+            .add_systems(OnEnter(AppState::Game), setup)
+            .add_systems(
+                FixedUpdate, 
+                (
+                    update,
+                    hide
+                )
+                .chain()
+                .run_if(in_state(AppState::Game))
+            )
+            .add_systems(OnExit(AppState::Game), destroy);
     }
 }
